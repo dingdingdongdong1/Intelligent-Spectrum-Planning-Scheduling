@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -11,6 +12,8 @@ class ProjectRead(BaseModel):
     id: int
     name: str
     status: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class TaskObjectiveResponse(BaseModel):

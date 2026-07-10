@@ -4,6 +4,14 @@ export type Project = {
   id: number;
   name: string;
   status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TaskProjectData = {
+  task_units: Array<Record<string, unknown>>;
+  equipment_groups: Array<Record<string, unknown>>;
+  spectrum_rules: Array<Record<string, unknown>>;
 };
 
 export type ValidationResult = {
@@ -1134,6 +1142,14 @@ export async function createProject(name: string): Promise<Project> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
   });
+}
+
+export async function listProjects(): Promise<Project[]> {
+  return request<Project[]>('/api/projects');
+}
+
+export async function getTaskProjectData(projectId: number): Promise<TaskProjectData> {
+  return request<TaskProjectData>(`/api/projects/${projectId}/task-data`);
 }
 
 export async function uploadFile(projectId: number, kind: 'stations' | 'rules', file: File): Promise<Record<string, unknown>> {

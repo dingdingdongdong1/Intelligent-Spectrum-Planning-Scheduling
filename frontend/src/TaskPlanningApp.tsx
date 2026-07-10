@@ -48,6 +48,7 @@ import {
   TaskAgentAssessment,
   TaskObjective,
   TaskPerformanceResult,
+  TaskProjectData,
   TaskReplanPreview,
   TaskReplanPayload,
   TaskSampleCatalog,
@@ -70,12 +71,14 @@ import {
   generateTaskDemo,
   getEquipmentLibrary,
   getTaskObjectives,
+  getTaskProjectData,
   getTaskAgentAssessment,
   getTaskSampleCatalog,
   getTaskScenarios,
   getTaskVersions,
   getTaskVisualization,
   listTaskSpectrumRules,
+  listProjects,
   planTaskProject,
   previewTaskReplan,
   previewTaskStrategyTrials,
@@ -158,6 +161,8 @@ const dashboardModuleTitles: Record<DashboardModuleKey, string> = {
 export default function TaskPlanningApp() {
   const [projectName, setProjectName] = useState('战场联合任务用频筹划');
   const [project, setProject] = useState<Project | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [taskDataSummary, setTaskDataSummary] = useState({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0 });
   const [activeModule, setActiveModule] = useState<DashboardModuleKey>('overview');
   const [objectives, setObjectives] = useState<TaskObjective[]>(defaultObjectives);
   const [objective, setObjective] = useState('task_assurance');
@@ -233,6 +238,15 @@ export default function TaskPlanningApp() {
         setParametricPayload(catalog.parametric_defaults);
       })
       .catch(() => setSampleCatalog(null));
+    void listProjects()
+      .then((items) => {
+        setProjects(items);
+        if (!items.length) return;
+        const savedProjectId = Number(window.localStorage.getItem('spectrum-planning-project-id'));
+        const selected = items.find((item) => item.id === savedProjectId) ?? items[0];
+        void openProject(selected, false);
+      })
+      .catch(() => setProjects([]));
   }, []);
 
   async function runAction<T>(action: () => Promise<T>, success: string): Promise<T | null> {
@@ -309,12 +323,82 @@ export default function TaskPlanningApp() {
     }
   }
 
+  function applyTaskDataSummary(data: TaskProjectData) {
+    setTaskDataSummary({
+      taskUnits: data.task_units.length,
+      equipmentGroups: data.equipment_groups.length,
+      spectrumRules: data.spectrum_rules.length,
+    });
+  }
+
+  async function refreshTaskDataSummary(projectId: number) {
+    try {
+      applyTaskDataSummary(await getTaskProjectData(projectId));
+    } catch {
+      setTaskDataSummary({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0 });
+    }
+  }
+
+  async function openProject(selected: Project, announce = true) {
+    setBusy(true);
+    setNotice(null);
+    setProject(selected);
+    setProjectName(selected.name);
+    clearPlanningState();
+    window.localStorage.setItem('spectrum-planning-project-id', String(selected.id));
+    try {
+      const [data, projectVersions, rules] = await Promise.all([
+        getTaskProjectData(selected.id),
+        getTaskVersions(selected.id),
+        listTaskSpectrumRules(selected.id),
+      ]);
+      applyTaskDataSummary(data);
+      setVersions(projectVersions);
+      setSpectrumRules(rules);
+
+      const latestRun = projectVersions.runs[0];
+      if (latestRun) {
+        const [latestVisualization, assessment] = await Promise.all([
+          getTaskVisualization(selected.id, latestRun.run_id),
+          getTaskAgentAssessment(selected.id, latestRun.run_id).catch(() => null),
+        ]);
+        setPlan({
+          run_id: latestRun.run_id,
+          status: latestRun.status,
+          message: latestRun.message,
+          summary: latestVisualization.summary,
+        });
+        setVisualization(latestVisualization);
+        setVisualizationRunId(latestRun.run_id);
+        setAgentAssessment(assessment);
+      }
+      if (announce) setNotice({ type: 'success', text: `已打开项目“${selected.name}”` });
+    } catch (error) {
+      setNotice({ type: 'error', text: error instanceof Error ? error.message : '项目加载失败' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refreshProjectList() {
+    const result = await runAction(listProjects, '项目列表已刷新');
+    if (result) setProjects(result);
+  }
+
   async function handleCreateProject() {
-    const created = await runAction(() => createProject(projectName), '项目已创建');
+    const name = projectName.trim();
+    if (!name) {
+      setNotice({ type: 'error', text: '请输入项目名称' });
+      return;
+    }
+    const created = await runAction(() => createProject(name), '项目已创建');
     if (created) {
       setProject(created);
+      setProjects((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       clearPlanningState();
       setSpectrumRules([]);
+      setTaskDataSummary({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0 });
+      window.localStorage.setItem('spectrum-planning-project-id', String(created.id));
     }
   }
 
@@ -327,6 +411,7 @@ export default function TaskPlanningApp() {
     if (result) {
       clearPlanningState();
       await refreshSpectrumRules(project.id);
+      await refreshTaskDataSummary(project.id);
     }
   }
 
@@ -339,6 +424,7 @@ export default function TaskPlanningApp() {
     if (result) {
       clearPlanningState();
       await refreshSpectrumRules(project.id);
+      await refreshTaskDataSummary(project.id);
     }
   }
 
@@ -356,6 +442,7 @@ export default function TaskPlanningApp() {
     if (result) {
       clearPlanningState();
       if (kind === 'spectrum-rules') await refreshSpectrumRules(project.id);
+      await refreshTaskDataSummary(project.id);
     }
   }
 
@@ -873,6 +960,39 @@ export default function TaskPlanningApp() {
               <Play size={16} />
               创建
             </button>
+          </div>
+          <div className="project-switcher">
+            <label htmlFor="existing-project">已有项目</label>
+            <div className="project-switcher-row">
+              <select
+                id="existing-project"
+                name="existing_project"
+                value={project?.id ?? ''}
+                onChange={(event) => {
+                  const selected = projects.find((item) => item.id === Number(event.target.value));
+                  if (selected) void openProject(selected);
+                }}
+                disabled={busy || projects.length === 0}
+              >
+                <option value="">{projects.length ? '选择项目' : '暂无已有项目'}</option>
+                {projects.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="icon-button" onClick={refreshProjectList} disabled={busy} title="刷新项目列表" aria-label="刷新项目列表">
+                <RefreshCw size={16} />
+              </button>
+            </div>
+            {project && (
+              <div className="project-data-summary" aria-label="当前项目数据概况">
+                <span>任务单元 <strong>{taskDataSummary.taskUnits}</strong></span>
+                <span>装备组 <strong>{taskDataSummary.equipmentGroups}</strong></span>
+                <span>频谱规则 <strong>{taskDataSummary.spectrumRules}</strong></span>
+                <span>创建时间 <strong>{formatProjectDate(project.created_at)}</strong></span>
+              </div>
+            )}
           </div>
           <label className="field-label" htmlFor="task-scenario">
             样例任务场景
@@ -5121,6 +5241,12 @@ function formatRunMetric(run: TaskVersionRun, key: 'quality') {
 
 function runQuality(run: TaskVersionRun): number {
   return numberMetric(recordValue(run.summary.quality_scores).total);
+}
+
+function formatProjectDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '--';
+  return parsed.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function numberMetric(value: unknown): number {

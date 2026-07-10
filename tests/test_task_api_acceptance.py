@@ -30,6 +30,12 @@ def test_task_planning_api_end_to_end_acceptance_flow() -> None:
     try:
         project = _assert_ok(client.post("/api/projects", json={"name": "api-e2e-acceptance"}))
         project_id = project["id"]
+        assert project["created_at"]
+        assert project["updated_at"]
+
+        projects = _assert_ok(client.get("/api/projects"))
+        assert projects[0]["id"] == project_id
+        assert projects[0]["name"] == "api-e2e-acceptance"
 
         demo = _assert_ok(client.post(f"/api/projects/{project_id}/generate-task-demo?scenario=large_joint_exercise"))
         assert demo["task_unit_count"] >= 12
