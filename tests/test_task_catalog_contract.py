@@ -9,6 +9,12 @@ from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
 from backend.app.main import app
+from backend.app.schemas import (
+    EquipmentLibraryItemResponse,
+    TaskObjectiveResponse,
+    TaskSampleCatalogResponse,
+    TaskScenarioResponse,
+)
 from backend.app.services import equipment_planning, task_catalog
 from backend.app.services.excel_io import (
     EQUIPMENT_GROUP_COLUMNS,
@@ -59,6 +65,10 @@ def test_catalog_endpoints_keep_their_public_contract() -> None:
     assert len(objectives.json()) == 10
     assert len(equipment.json()) == 17
     assert len(scenarios.json()) == 8
+    assert objectives.json() == task_catalog.TASK_OBJECTIVES
+    assert equipment.json() == task_catalog.EQUIPMENT_LIBRARY
+    assert scenarios.json() == task_catalog.TASK_SCENARIOS
+    assert samples.json() == equipment_planning.task_sample_catalog()
     assert set(samples.json()) == {
         "presets",
         "task_unit_profiles",
@@ -69,6 +79,44 @@ def test_catalog_endpoints_keep_their_public_contract() -> None:
         "objective_count",
     }
     assert any(item["key"] == "balanced" for item in samples.json()["weight_templates"])
+
+
+def test_catalog_routes_declare_structured_response_models() -> None:
+    routes = {route.path: route for route in app.routes}
+
+    assert routes["/api/task-objectives"].response_model == list[TaskObjectiveResponse]
+    assert routes["/api/equipment-library"].response_model == list[EquipmentLibraryItemResponse]
+    assert routes["/api/task-scenarios"].response_model == list[TaskScenarioResponse]
+    assert routes["/api/task-sample-catalog"].response_model is TaskSampleCatalogResponse
+
+
+def test_catalog_openapi_uses_structured_component_references() -> None:
+    schema = TestClient(app).get("/openapi.json").json()
+    paths = schema["paths"]
+
+    list_components = {
+        "/api/task-objectives": "TaskObjectiveResponse",
+        "/api/equipment-library": "EquipmentLibraryItemResponse",
+        "/api/task-scenarios": "TaskScenarioResponse",
+    }
+    for path, component in list_components.items():
+        response_schema = paths[path]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+        assert response_schema["type"] == "array"
+        assert response_schema["items"]["$ref"] == f"#/components/schemas/{component}"
+
+    sample_schema = paths["/api/task-sample-catalog"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+    assert sample_schema["$ref"] == "#/components/schemas/TaskSampleCatalogResponse"
+
+    components = schema["components"]["schemas"]
+    assert components["TaskSampleCatalogResponse"]["properties"]["task_unit_profiles"]["items"]["$ref"] == (
+        "#/components/schemas/TaskUnitProfileResponse"
+    )
+    assert components["TaskSampleCatalogResponse"]["properties"]["weight_templates"]["items"]["$ref"] == (
+        "#/components/schemas/PlanningWeightTemplateResponse"
+    )
+    assert components["PlanningWeightTemplateResponse"]["properties"]["weights"]["$ref"] == (
+        "#/components/schemas/PlanningWeightsResponse"
+    )
 
 
 @pytest.mark.parametrize(

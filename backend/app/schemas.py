@@ -13,6 +13,93 @@ class ProjectRead(BaseModel):
     status: str
 
 
+class TaskObjectiveResponse(BaseModel):
+    objective: str
+    label: str
+    description: str
+
+
+class EquipmentLibraryItemResponse(BaseModel):
+    equipment_type: str
+    default_assignment_mode: str
+    reasonable_bandwidth_khz: str
+    reasonable_power_w: str
+    typical_mobility: str
+    planning_notes: str
+
+
+class TaskScenarioResponse(BaseModel):
+    key: str
+    name: str
+    description: str
+
+
+class TaskSamplePresetResponse(BaseModel):
+    key: str
+    name: str
+    scenario: str
+    task_unit_count: int
+    density_multiplier: float
+    spectrum_pressure: str
+    description: str
+
+
+class TaskUnitProfileResponse(BaseModel):
+    code: str
+    name: str
+    unit_type: str
+    spectrum_relation: str
+    preferred_band_groups: str
+    default_priority: int
+    min_satisfaction_ratio: float
+    equipment_group_count: int
+    equipment_types: list[str]
+
+
+class BatchPerformanceScaleResponse(BaseModel):
+    key: str
+    name: str
+    scenario: str | None = None
+    prefix: str | None = None
+    unit_count: int
+    density_multiplier: float
+
+
+class PlanningWeightsResponse(BaseModel):
+    task: int
+    risk: int
+    spectrum: int
+    priority: int
+    switching: int
+    reuse: int
+
+
+class PlanningWeightTemplateResponse(BaseModel):
+    key: str
+    name: str
+    weights: PlanningWeightsResponse
+    description: str
+
+
+class ParametricSampleDefaultsResponse(BaseModel):
+    unit_count: int
+    density_multiplier: float
+    radar_ratio: int
+    uav_ratio: int
+    protection_density: int
+    forbidden_density: int
+
+
+class TaskSampleCatalogResponse(BaseModel):
+    presets: list[TaskSamplePresetResponse]
+    task_unit_profiles: list[TaskUnitProfileResponse]
+    equipment_types: list[EquipmentLibraryItemResponse]
+    batch_scales: list[BatchPerformanceScaleResponse]
+    weight_templates: list[PlanningWeightTemplateResponse]
+    parametric_defaults: ParametricSampleDefaultsResponse
+    objective_count: int
+
+
 class ValidationResponse(BaseModel):
     ok: bool
     errors: list[str]

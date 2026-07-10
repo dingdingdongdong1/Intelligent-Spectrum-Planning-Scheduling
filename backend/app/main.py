@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from .database import get_session, init_db
 from .models import AuditLog, FrequencyRule, PlanningRun, Project
 from .schemas import (
+    EquipmentLibraryItemResponse,
     ChatRequest,
     ChatResponse,
     PlanRequest,
@@ -22,7 +23,10 @@ from .schemas import (
     SpectrumRulePayload,
     TaskCapacityBatchRequest,
     TaskCapacityRiskClosureRequest,
+    TaskObjectiveResponse,
     TaskReplanRequest,
+    TaskSampleCatalogResponse,
+    TaskScenarioResponse,
     ValidationResponse,
 )
 from .services.chat import parse_chat_instruction
@@ -235,22 +239,26 @@ def list_projects(session: Session = Depends(get_session)) -> list[Project]:
     return session.exec(select(Project).order_by(Project.id.desc())).all()
 
 
-@app.get("/api/task-objectives")
+@app.get("/api/task-objectives", response_model=list[TaskObjectiveResponse])
 def task_objectives() -> list[dict]:
     return TASK_OBJECTIVES
 
 
-@app.get("/api/equipment-library")
+@app.get("/api/equipment-library", response_model=list[EquipmentLibraryItemResponse])
 def equipment_library() -> list[dict]:
     return equipment_parameter_library()
 
 
-@app.get("/api/task-scenarios")
+@app.get("/api/task-scenarios", response_model=list[TaskScenarioResponse])
 def task_scenarios() -> list[dict]:
     return task_scenario_library()
 
 
-@app.get("/api/task-sample-catalog")
+@app.get(
+    "/api/task-sample-catalog",
+    response_model=TaskSampleCatalogResponse,
+    response_model_exclude_none=True,
+)
 def task_samples() -> dict:
     return task_sample_catalog()
 

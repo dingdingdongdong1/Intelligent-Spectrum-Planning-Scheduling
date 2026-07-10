@@ -62,31 +62,62 @@ def db_spectrum_rules_to_dicts(session: Session, project_id: int) -> list[dict]:
     return [row.model_dump() for row in rows]
 
 
-def replace_task_units(session: Session, project_id: int, records: list[dict]) -> None:
+def _replace_task_units_without_commit(session: Session, project_id: int, records: list[dict]) -> None:
     session.exec(delete(TaskUnit).where(TaskUnit.project_id == project_id))
     for record in records:
         session.add(TaskUnit(project_id=project_id, **record))
     _touch_project(session, project_id, "task_units_uploaded")
     session.add(AuditLog(project_id=project_id, actor="user", action="upload_task_units", detail=f"上传 {len(records)} 个任务单元"))
+
+
+def replace_task_units(session: Session, project_id: int, records: list[dict]) -> None:
+    _replace_task_units_without_commit(session, project_id, records)
     session.commit()
 
 
-def replace_equipment_groups(session: Session, project_id: int, records: list[dict]) -> None:
+def _replace_equipment_groups_without_commit(session: Session, project_id: int, records: list[dict]) -> None:
     session.exec(delete(EquipmentGroup).where(EquipmentGroup.project_id == project_id))
     for record in records:
         session.add(EquipmentGroup(project_id=project_id, **record))
     _touch_project(session, project_id, "equipment_groups_uploaded")
     session.add(AuditLog(project_id=project_id, actor="user", action="upload_equipment_groups", detail=f"上传 {len(records)} 个装备组"))
+
+
+def replace_equipment_groups(session: Session, project_id: int, records: list[dict]) -> None:
+    _replace_equipment_groups_without_commit(session, project_id, records)
     session.commit()
 
 
-def replace_spectrum_rules(session: Session, project_id: int, records: list[dict]) -> None:
+def _replace_spectrum_rules_without_commit(session: Session, project_id: int, records: list[dict]) -> None:
     session.exec(delete(SpectrumRule).where(SpectrumRule.project_id == project_id))
     for record in records:
         session.add(SpectrumRule(project_id=project_id, **record))
     _touch_project(session, project_id, "spectrum_rules_uploaded")
     session.add(AuditLog(project_id=project_id, actor="user", action="upload_spectrum_rules", detail=f"上传 {len(records)} 条频段规则"))
+
+
+def replace_spectrum_rules(session: Session, project_id: int, records: list[dict]) -> None:
+    _replace_spectrum_rules_without_commit(session, project_id, records)
     session.commit()
+
+
+def _replace_demo_scenario_records(
+    session: Session,
+    project_id: int,
+    task_units: list[dict],
+    equipment_groups: list[dict],
+    spectrum_rules: list[dict],
+    audit_log: AuditLog,
+) -> None:
+    try:
+        _replace_task_units_without_commit(session, project_id, task_units)
+        _replace_equipment_groups_without_commit(session, project_id, equipment_groups)
+        _replace_spectrum_rules_without_commit(session, project_id, spectrum_rules)
+        session.add(audit_log)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
 
 
 def task_scenario_library() -> list[dict]:
@@ -95,12 +126,15 @@ def task_scenario_library() -> list[dict]:
 
 def generate_demo_scenario(session: Session, project_id: int, scenario: str = "baseline") -> dict:
     task_units, equipment_groups, spectrum_rules = demo_scenario_records(scenario)
-    replace_task_units(session, project_id, task_units)
-    replace_equipment_groups(session, project_id, equipment_groups)
-    replace_spectrum_rules(session, project_id, spectrum_rules)
     scenario_info = next((item for item in TASK_SCENARIOS if item["key"] == scenario), TASK_SCENARIOS[0])
-    session.add(AuditLog(project_id=project_id, action="generate_demo_scenario", detail=f"生成{scenario_info['name']}仿真场景"))
-    session.commit()
+    _replace_demo_scenario_records(
+        session,
+        project_id,
+        task_units,
+        equipment_groups,
+        spectrum_rules,
+        AuditLog(project_id=project_id, action="generate_demo_scenario", detail=f"生成{scenario_info['name']}仿真场景"),
+    )
     return {
         "scenario": scenario_info,
         "task_unit_count": len(task_units),
@@ -112,10 +146,12 @@ def generate_demo_scenario(session: Session, project_id: int, scenario: str = "b
 
 def generate_parametric_demo_scenario(session: Session, project_id: int, payload: dict) -> dict:
     task_units, equipment_groups, spectrum_rules = parametric_demo_records(payload)
-    replace_task_units(session, project_id, task_units)
-    replace_equipment_groups(session, project_id, equipment_groups)
-    replace_spectrum_rules(session, project_id, spectrum_rules)
-    session.add(
+    _replace_demo_scenario_records(
+        session,
+        project_id,
+        task_units,
+        equipment_groups,
+        spectrum_rules,
         AuditLog(
             project_id=project_id,
             action="generate_parametric_demo_scenario",
@@ -128,9 +164,8 @@ def generate_parametric_demo_scenario(session: Session, project_id: int, payload
                 },
                 ensure_ascii=False,
             ),
-        )
+        ),
     )
-    session.commit()
     return {
         "scenario": {"key": "parametric", "name": "参数化仿真样例", "description": "按用户参数生成的任务单元和装备组。"},
         "task_unit_count": len(task_units),
