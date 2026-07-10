@@ -199,6 +199,33 @@ class SpectrumRule(SQLModel, table=True):
     raw_json: str
 
 
+class SpectrumResource(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("project_id", "resource_id", name="uq_spectrumresource_project_resource_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(index=True)
+    resource_id: str = Field(index=True)
+    name: str
+    resource_type: str = Field(index=True)
+    purpose: str = ""
+    region: str = Field(default="全域", index=True)
+    start_mhz: float
+    end_mhz: float
+    channel_step_khz: float = 25
+    max_bandwidth_khz: float = 25
+    max_power_w: float = 1
+    guard_band_khz: float = 0
+    center_lat: float | None = None
+    center_lon: float | None = None
+    coverage_radius_km: float = 0
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    compatible_equipment_types: str = ""
+    status: str = "启用"
+    source: str = "USER_UI"
+    notes: str = ""
+
+
 class TaskLink(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("project_id", "link_id", name="uq_tasklink_project_link_id"),)
 

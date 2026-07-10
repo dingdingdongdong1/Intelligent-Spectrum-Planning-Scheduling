@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from datetime import datetime
 from io import BytesIO
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
@@ -23,6 +24,7 @@ from .schemas import (
     ProjectCreate,
     ProjectRead,
     RulePayload,
+    SpectrumResourcePayload,
     SpectrumRulePayload,
     TaskLinkPayload,
     TaskPhasePayload,
@@ -75,7 +77,7 @@ from .services.equipment_planning import (
     validate_task_inputs,
 )
 from .services.task_catalog import TASK_OBJECTIVES
-from .services import task_workbench
+from .services import spectrum_resources, task_workbench
 from .services.excel_io import (
     build_equipment_group_template,
     build_rule_template,
@@ -564,6 +566,52 @@ async def import_task_package(
 def task_spectrum_rules(project_id: int, session: Session = Depends(get_session)) -> list[dict]:
     _require_project(session, project_id)
     return list_spectrum_rules(session, project_id)
+
+
+@app.get("/api/projects/{project_id}/spectrum-resources")
+def spectrum_resources_get(project_id: int, session: Session = Depends(get_session)) -> list[dict]:
+    return spectrum_resources.list_resources(session, project_id)
+
+
+@app.post("/api/projects/{project_id}/spectrum-resources")
+def spectrum_resources_post(
+    project_id: int,
+    payload: SpectrumResourcePayload,
+    session: Session = Depends(get_session),
+) -> dict:
+    return spectrum_resources.create_resource(session, project_id, payload.model_dump())
+
+
+@app.put("/api/projects/{project_id}/spectrum-resources/{row_id}")
+def spectrum_resources_put(
+    project_id: int,
+    row_id: int,
+    payload: SpectrumResourcePayload,
+    session: Session = Depends(get_session),
+) -> dict:
+    return spectrum_resources.update_resource(session, project_id, row_id, payload.model_dump())
+
+
+@app.delete("/api/projects/{project_id}/spectrum-resources/{row_id}")
+def spectrum_resources_delete(project_id: int, row_id: int, session: Session = Depends(get_session)) -> dict:
+    spectrum_resources.delete_resource(session, project_id, row_id)
+    return {"ok": True}
+
+
+@app.get("/api/projects/{project_id}/spectrum-resource-heatmap")
+def spectrum_resource_heatmap_get(
+    project_id: int,
+    at: str | None = Query(default=None),
+    region: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> dict:
+    target_time = None
+    if at:
+        try:
+            target_time = datetime.fromisoformat(at)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="at必须是ISO日期时间") from exc
+    return spectrum_resources.resource_heatmap(session, project_id, target_time, region)
 
 
 @app.post("/api/projects/{project_id}/spectrum-rules")

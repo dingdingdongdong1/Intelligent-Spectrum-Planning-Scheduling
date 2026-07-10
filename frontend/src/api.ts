@@ -17,6 +17,55 @@ export type TaskProjectData = {
   spectrum_rules: TaskSpectrumRuleRecord[];
 };
 
+export type SpectrumResourcePayload = {
+  resource_id: string;
+  name: string;
+  resource_type: string;
+  purpose: string;
+  region: string;
+  start_mhz: number;
+  end_mhz: number;
+  channel_step_khz: number;
+  max_bandwidth_khz: number;
+  max_power_w: number;
+  guard_band_khz: number;
+  center_lat: number | null;
+  center_lon: number | null;
+  coverage_radius_km: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  compatible_equipment_types: string;
+  status: string;
+  source: string;
+  notes: string;
+};
+
+export type SpectrumResourceRecord = SpectrumResourcePayload & { id: number; project_id: number };
+
+export type SpectrumResourceHeatmap = {
+  at: string;
+  region: string;
+  summary: {
+    resource_count: number;
+    active_resource_count: number;
+    cell_count: number;
+    covered_bandwidth_mhz: number;
+    average_availability_pct: number;
+    type_counts: Record<string, number>;
+  };
+  cells: Array<{
+    start_mhz: number;
+    end_mhz: number;
+    width_mhz: number;
+    resource_type: string;
+    availability_score: number;
+    availability_pct: number;
+    region: string;
+    purpose: string;
+    active_resource_ids: string[];
+  }>;
+};
+
 export type MissionTaskPayload = {
   mission_id: string;
   name: string;
@@ -1249,6 +1298,42 @@ export async function listProjects(): Promise<Project[]> {
 
 export async function getTaskProjectData(projectId: number): Promise<TaskProjectData> {
   return request<TaskProjectData>(`/api/projects/${projectId}/task-data`);
+}
+
+export async function listSpectrumResources(projectId: number): Promise<SpectrumResourceRecord[]> {
+  return request<SpectrumResourceRecord[]>(`/api/projects/${projectId}/spectrum-resources`);
+}
+
+export async function createSpectrumResource(projectId: number, payload: SpectrumResourcePayload): Promise<SpectrumResourceRecord> {
+  return request<SpectrumResourceRecord>(`/api/projects/${projectId}/spectrum-resources`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+export async function updateSpectrumResource(
+  projectId: number,
+  rowId: number,
+  payload: SpectrumResourcePayload,
+): Promise<SpectrumResourceRecord> {
+  return request<SpectrumResourceRecord>(`/api/projects/${projectId}/spectrum-resources/${rowId}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteSpectrumResource(projectId: number, rowId: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/projects/${projectId}/spectrum-resources/${rowId}`, { method: 'DELETE' });
+}
+
+export async function getSpectrumResourceHeatmap(
+  projectId: number,
+  at?: string,
+  region?: string,
+): Promise<SpectrumResourceHeatmap> {
+  const query = new URLSearchParams();
+  if (at) query.set('at', at);
+  if (region) query.set('region', region);
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return request<SpectrumResourceHeatmap>(`/api/projects/${projectId}/spectrum-resource-heatmap${suffix}`);
 }
 
 export async function saveMissionTask(projectId: number, payload: MissionTaskPayload): Promise<MissionTaskRecord> {

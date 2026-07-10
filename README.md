@@ -11,6 +11,8 @@
 - 装备组管理：维护装备类型、数量、带宽、功率、优先级、机动属性和任务归属。
 - 数据整体导入：任务单元、装备组和频谱规则三表跨表校验并在单个事务中提交。
 - 频谱规则管理：维护可用、禁用、保护、固定占用等频段规则。
+- 频谱资源管理：维护可用频段、固定占用、临时占用、保护频段和禁用频段，支持用途、区域、时段、步进、功率和兼容设备约束。
+- 资源可用性热力图：按查询时刻和区域计算频段覆盖、主导占用类型与可用率，为规划和重筹提供资源底图。
 - 自动用频规划：按任务保障、干扰最低、带宽节约、高优先级装备优先等目标生成方案。
 - 干扰风险评估：输出同频/邻频风险、瓶颈频段、冲突理由和解释链。
 - 可视化总览：展示任务保障率、频段占用、空间态势联动、任务保障矩阵。
@@ -84,6 +86,9 @@ GET http://127.0.0.1:8000/api/phase-one-capabilities
 - `POST /api/projects/{id}/upload-task-units`
 - `POST /api/projects/{id}/upload-equipment-groups`
 - `POST /api/projects/{id}/upload-spectrum-rules`
+- `GET|POST /api/projects/{id}/spectrum-resources`
+- `PUT|DELETE /api/projects/{id}/spectrum-resources/{row_id}`
+- `GET /api/projects/{id}/spectrum-resource-heatmap`
 - `POST /api/projects/{id}/validate-task`
 - `POST /api/projects/{id}/task-plan`
 - `GET /api/projects/{id}/task-visualization`

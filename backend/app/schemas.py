@@ -214,6 +214,29 @@ class SpectrumRulePayload(BaseModel):
     severity: str = "中"
 
 
+class SpectrumResourcePayload(BaseModel):
+    resource_id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    resource_type: str
+    purpose: str = ""
+    region: str = "全域"
+    start_mhz: float = Field(ge=0)
+    end_mhz: float = Field(gt=0)
+    channel_step_khz: float = Field(default=25, gt=0)
+    max_bandwidth_khz: float = Field(default=25, gt=0)
+    max_power_w: float = Field(default=1, ge=0)
+    guard_band_khz: float = Field(default=0, ge=0)
+    center_lat: float | None = Field(default=None, ge=-90, le=90)
+    center_lon: float | None = Field(default=None, ge=-180, le=180)
+    coverage_radius_km: float = Field(default=0, ge=0)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    compatible_equipment_types: str = ""
+    status: str = "启用"
+    source: str = "USER_UI"
+    notes: str = ""
+
+
 class MissionTaskPayload(BaseModel):
     mission_id: str = Field(min_length=1)
     name: str = Field(min_length=1)

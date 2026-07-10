@@ -93,6 +93,7 @@ import {
   validateTaskProject,
 } from './api';
 import TaskWorkbench from './TaskWorkbench';
+import SpectrumResourcePanel from './SpectrumResourcePanel';
 type Notice = {
   type: 'info' | 'error' | 'success';
   text: string;
@@ -1193,7 +1194,8 @@ export default function TaskPlanningApp() {
             )}
 
             {activeModule === 'spectrumResources' && (
-              <div id="dashboard-rules" className="dashboard-section">
+              <div id="dashboard-rules" className="dashboard-section spectrum-resource-stack">
+                <SpectrumResourcePanel projectId={project?.id ?? null} busy={busy} />
                 <SpectrumRuleManagerPanel
                   busy={busy}
                   projectId={project?.id ?? null}
