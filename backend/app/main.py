@@ -28,7 +28,6 @@ from .schemas import (
 from .services.chat import parse_chat_instruction
 from .services.comparison import compare_plans
 from .services.equipment_planning import (
-    TASK_OBJECTIVES,
     build_task_export_xlsx,
     build_task_report,
     build_task_visualization_data,
@@ -65,6 +64,7 @@ from .services.equipment_planning import (
     update_spectrum_rule,
     validate_task_inputs,
 )
+from .services.task_catalog import TASK_OBJECTIVES
 from .services.excel_io import (
     build_equipment_group_template,
     build_rule_template,
