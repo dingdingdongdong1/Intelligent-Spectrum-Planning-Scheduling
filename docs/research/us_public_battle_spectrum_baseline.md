@@ -1,4 +1,4 @@
-# 美军公开战例与用频参数基线（第一批）
+# 美军公开战例与用频参数基线（第一、二批）
 
 更新日期：2026-07-10
 
@@ -92,6 +92,29 @@
 
 详细字段、来源 URL 和证据等级见 `us_public_battle_spectrum_baseline.xlsx`。
 
+## 第二批公开参数：雷达、卫星通信与无人机链路
+
+| 系统/业务 | 公开频率信息 | 公开的其他参数 | 证据边界与平台用途 |
+| --- | --- | --- | --- |
+| AN/TPQ-53 反炮兵雷达 | 2-4 GHz（S 波段） | 90 度模式：火箭 60 km、火炮 34 km、迫击炮 20 km；360 度模式：20 km | 装备能力范围；未公开实际调谐点、脉冲参数和射频功率，用于建立雷达时空保护对象 |
+| AN/MPQ-64 Sentinel | 仅公开 X 波段，数值范围留空 | 三维相控阵、360 度、75 km | 不用通用 X 波段边界替代具体授权范围，用于建立持续空情监视任务 |
+| 联邦/军用监视雷达参考 | 2700-2900 MHz | 机场、天气和军用监视雷达共存 | 业务频段参考，用于频率-距离协调、保护区和杂散约束建模 |
+| 军用/海上搜索雷达参考 | 2900-3100 MHz | 脉冲及线性调频雷达类别 | 用于接收机前端过载、带外发射和频率-距离隔离评估 |
+| FLTSATCOM/UHF 卫星下行 | 243.855-269.950 MHz | 窄带移动卫星通信 | 历史系统范围；不包含当前频道计划和实际任务网络 |
+| FLTSATCOM/UHF 卫星上行 | 292.850-317.325 MHz | 窄带移动卫星通信 | 上、下行分别建模；不把中间空段合并为连续可用频段 |
+| WGS X-band 业务类别 | 8-12 GHz 仅作为通用 X 波段文本定义；数值字段留空 | WGS 支持固定、可搬移、地面、空中和舰载终端 | 仅表示业务类别，不是 WGS 转发器或上下行实际范围 |
+| WGS Ka-band 业务类别 | 27-40 GHz 仅作为通用 Ka 波段文本定义；数值字段留空 | 高容量骨干及广播业务 | 仅表示业务类别；规划模型还需考虑雨衰、波束和终端能力 |
+| UAS CNPC 公共规划参考 | 5030-5091 MHz | 非隔离空域安全控制与非载荷通信 | 面向未来的公共规划频段，不是伊拉克/阿富汗作战频率 |
+| 航空/UAS 试验遥测参考 | 2200-2290 MHz | 飞行试验遥测、高分辨率视频和无人飞行器测试 | 试验业务频段，不代表作战无人机飞控或载荷链路 |
+
+### 第二批对平台数据模型的直接影响
+
+- 雷达必须作为“高功率发射任务 + 接收保护对象”建模，字段至少包括工作时段、搜索扇区、覆盖距离、保护区、机动性和证据状态。
+- 卫星链路必须拆分上行、下行、波束和带宽资源；系统支持某频段类别，不等于该频段整体可分配。
+- 无人机必须拆分安全飞控链路、载荷数据链路和试验遥测，三者的保障等级、带宽和失效影响不同。
+- 每条参数需保留 `frequency_scope`、`source_ids`、披露状态和证据等级；规划器只能把经过授权或人工确认的记录转换为可用规则。
+- `case_links` 只允许填写现有 `CASE-*` 编号；时代背景、能力背景和共存背景统一放入 `baseline_context`，避免形成虚假战例关联。
+
 ## 主要公开来源
 
 1. U.S. Army, *1992 Weapon Systems Handbook*: https://asc.army.mil/docs/wsh2/1992-wsh.pdf
@@ -106,10 +129,22 @@
 10. U.S. Army FM 3-01, *Air and Missile Defense Operations*: https://rdl.train.army.mil/catalog-ws/view/100.ATSC/C01CC9C1-DA1C-4D5E-A6EB-5FCFAE218DCD-1398170439966/fm3_01.pdf
 11. U.S. Department of Transportation, *Transportation Strategic Spectrum Plan*: https://www.ntia.gov/sites/default/files/publications/transportation_strategic_spectrum_plan_nov2007_0.pdf
 12. GAO-26-107873, *Spectrum Management*: https://files.gao.gov/reports/GAO-26-107873/index.html
+13. U.S. Army ODIN, *AN/TPQ-53 Counterfire Target Acquisition Radar*: https://odin.t2com.army.mil/WEG/Asset/6ea3c7edc1d7b3bab022f375761f3ee6
+14. U.S. Army Acquisition, *U.S. Army Acquisition Program Portfolio 2024*: https://api.army.mil/e2/c/downloads/2024/07/19/ab2038a9/u-s-army-portfolio-2024.pdf
+15. NTIA, *2700-2900 MHz Federal Spectrum Use Report*: https://www.ntia.gov/files/ntia/publications/compendium/2700.00-2900.00_01MAR14.pdf
+16. NTIA, *2900-3100 MHz Federal Spectrum Use Report*: https://www.ntia.gov/files/ntia/publications/compendium/2900.00-3100.00_01MAY15.pdf
+17. NTIA, *225-328.6 MHz Federal Spectrum Use Report*: https://www.ntia.gov/files/ntia/publications/compendium/0225.00-0328.60_01MAR14.pdf
+18. U.S. Space Force, *Wideband Global SATCOM Satellite Fact Sheet*: https://www.spaceforce.mil/about-us/fact-sheets/article/2197740/wideband-global-satcom-satellite/
+19. U.S. Army, *Operating in a Denied, Degraded, and Disrupted Space Operational Environment Handbook*: https://api.army.mil/e2/c/downloads/2023/01/19/7f7281ee/18-28-operating-in-a-denied-degraded-and-disrupted-space-operational-environment-handbook-jun-18-public.pdf
+20. NTIA, *5030-5250 MHz Spectrum Compendium*: https://www.ntia.gov/files/ntia/publications/compendium/5030.00-5250.00-02092021.pdf
+21. FAA, *Integration of Civil UAS in the National Airspace System Roadmap*: https://www.faa.gov/sites/faa.gov/files/uas/resources/policy_library/Second_Edition_Integration_of_Civil_UAS_NAS_Roadmap_July%25202018.pdf
+22. NTIA, *2200-2290 MHz Federal Spectrum Use Report*: https://www.ntia.gov/files/ntia/publications/compendium/2200.00-2290.00_01MAY15.pdf
+23. U.S. Department of Defense / NTIA, *DoD 4400-4940 MHz Band Assessment*: https://www.ntia.gov/sites/default/files/publications/dodassessment_0.pdf
+24. U.S. Army Acquisition Support Center, *Acquisition partnership to roll out new improved Sentinel Radar*: https://asc.army.mil/web/access-acquisition-partnership-to-roll-out-new-improved-sentinel-radar/
 
 ## 下一批需要补充
 
-- 海湾战争和伊拉克战争的任务阶段、节点规模、保障优先级和链路关系。
-- 公开资料中的雷达、卫星通信、无人机控制/载荷链路参数及其证据等级。
-- 面向平台的数据字典：任务时段、通信链路、频率授权、地理范围和机动事件。
-- 将公开系统参数转成独立的仿真参数库，而不是直接转成行动用频规则。
+- 从公开材料提炼任务阶段、时间窗、机动范围、节点依赖和保障优先级，形成可导入的任务模板。
+- 补充公开的干扰共存与保护准则，重点是接收机门限、频率-距离隔离、保护区和风险等级，不收集干扰装备的实战操作参数。
+- 建立平台数据字典，将战例、装备能力、频谱授权、链路需求和事件变化分层存储。
+- 建立独立 `SIM-*` 仿真参数库，用合成频点、功率、带宽和位置验证规划算法，避免把公开装备能力直接当作行动用频规则。

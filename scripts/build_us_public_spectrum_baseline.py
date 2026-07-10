@@ -319,18 +319,300 @@ PUBLIC_PARAMETERS = [
         "evidence_note": "属于频谱迁移和共存评估，不证明某次战役实际使用该范围。",
         "usage_boundary": "仅供冲突研究，不得直接转成可用规则。",
     },
+    {
+        "parameter_id": "PAR-RADAR-TPQ53",
+        "system_or_service": "AN/TPQ-53反炮兵雷达",
+        "mission_role": "迫击炮、火炮和火箭弹探测、分类及发射点定位",
+        "case_links": "",
+        "frequency_start_mhz": 2000.0,
+        "frequency_end_mhz": 4000.0,
+        "center_frequency_mhz": None,
+        "channel_step_khz": None,
+        "occupied_bandwidth_khz": None,
+        "power_w": None,
+        "channel_count": None,
+        "range_km": "90度模式：火箭60、火炮34、迫击炮20；360度模式：20",
+        "waveform_or_access": "S波段有源相控阵；具体波形未公开",
+        "mobility": "高机动、可部署雷达",
+        "assignment_mode": "雷达调谐范围/时段占用",
+        "planning_relation": "高优先级雷达发射；需要时空保护和同址兼容",
+        "parameter_status": "公开波段与能力范围",
+        "confidence": "中高",
+        "source_org": "U.S. Army ODIN",
+        "source_title": "AN/TPQ-53 Counterfire Target Acquisition Radar",
+        "source_url": "https://odin.t2com.army.mil/WEG/Asset/6ea3c7edc1d7b3bab022f375761f3ee6",
+        "evidence_note": "ODIN公开2-4 GHz和不同工作模式的最大覆盖距离；未将60 kW电源功率误作射频发射功率。",
+        "usage_boundary": "宽波段装备能力记录，不代表战时调谐点、脉冲参数或部署位置。",
+    },
+    {
+        "parameter_id": "PAR-RADAR-SENTINEL",
+        "system_or_service": "AN/MPQ-64 Sentinel",
+        "mission_role": "低空空情、无人机、巡航导弹及固定/旋翼机监视",
+        "case_links": "",
+        "frequency_start_mhz": None,
+        "frequency_end_mhz": None,
+        "center_frequency_mhz": None,
+        "channel_step_khz": None,
+        "occupied_bandwidth_khz": None,
+        "power_w": None,
+        "channel_count": None,
+        "range_km": "75",
+        "waveform_or_access": "三维X波段相控阵；具体频率和波形未公开",
+        "mobility": "车载/拖车式、两人操作",
+        "assignment_mode": "雷达波段/时段占用",
+        "planning_relation": "持续空情监视；与数据链和防空指挥系统协同",
+        "parameter_status": "仅公开频段类别和覆盖距离",
+        "confidence": "高",
+        "source_org": "U.S. Army Acquisition",
+        "source_title": "U.S. Army Acquisition Program Portfolio 2024; Acquisition partnership to roll out new improved Sentinel Radar",
+        "source_url": "https://api.army.mil/e2/c/downloads/2024/07/19/ab2038a9/u-s-army-portfolio-2024.pdf | https://asc.army.mil/web/access-acquisition-partnership-to-roll-out-new-improved-sentinel-radar/",
+        "evidence_note": "陆军公开资料明确X波段、三维、360度和75 km；数值调谐范围保持为空。75 km和360度由陆军采办文章直接支持。",
+        "usage_boundary": "不得用通用X波段边界替代具体授权范围。",
+    },
+    {
+        "parameter_id": "PAR-RADAR-SURVEILLANCE-2700",
+        "system_or_service": "联邦/军用监视雷达参考",
+        "mission_role": "机场监视、天气与军用监视雷达共存",
+        "case_links": "",
+        "frequency_start_mhz": 2700.0,
+        "frequency_end_mhz": 2900.0,
+        "center_frequency_mhz": None,
+        "channel_step_khz": None,
+        "occupied_bandwidth_khz": None,
+        "power_w": None,
+        "channel_count": None,
+        "range_km": None,
+        "waveform_or_access": "脉冲雷达；具体系统参数依RSEC和单台指配",
+        "mobility": "固定、移动或可搬移",
+        "assignment_mode": "单台雷达频率与保护区",
+        "planning_relation": "高功率雷达之间需频率-距离协调和杂散保护",
+        "parameter_status": "公开业务频段",
+        "confidence": "高",
+        "source_org": "NTIA",
+        "source_title": "2700-2900 MHz Federal Spectrum Use Report",
+        "source_url": "https://www.ntia.gov/files/ntia/publications/compendium/2700.00-2900.00_01MAR14.pdf",
+        "evidence_note": "NTIA强调该频段雷达需谨慎协调并符合Radar Spectrum Engineering Criteria。",
+        "usage_boundary": "业务共存参考，不代表平台可在整个频段自由分配。",
+    },
+    {
+        "parameter_id": "PAR-RADAR-MARITIME-2900",
+        "system_or_service": "军用/海上搜索雷达参考",
+        "mission_role": "海上导航、搜索、跟踪和训练",
+        "case_links": "",
+        "frequency_start_mhz": 2900.0,
+        "frequency_end_mhz": 3100.0,
+        "center_frequency_mhz": None,
+        "channel_step_khz": None,
+        "occupied_bandwidth_khz": None,
+        "power_w": None,
+        "channel_count": None,
+        "range_km": None,
+        "waveform_or_access": "脉冲/线性调频雷达类别",
+        "mobility": "舰载、岸基、可搬移",
+        "assignment_mode": "雷达频率与保护区",
+        "planning_relation": "需评估接收机前端过载、带外发射和频率-距离隔离",
+        "parameter_status": "公开业务频段",
+        "confidence": "高",
+        "source_org": "NTIA",
+        "source_title": "2900-3100 MHz Federal Spectrum Use Report",
+        "source_url": "https://www.ntia.gov/files/ntia/publications/compendium/2900.00-3100.00_01MAY15.pdf",
+        "evidence_note": "NTIA公开该频段的军用和海上雷达用途，并说明线性调频等技术。",
+        "usage_boundary": "不包含单台雷达峰值功率、脉宽、PRF或部署参数。",
+    },
+    {
+        "parameter_id": "PAR-UHF-SATCOM-DOWN",
+        "system_or_service": "FLTSATCOM/UHF移动卫星下行参考",
+        "mission_role": "战术和战略窄带卫星通信下行",
+        "case_links": "CASE-OEF-2001; CASE-OIF-2003",
+        "frequency_start_mhz": 243.855,
+        "frequency_end_mhz": 269.95,
+        "center_frequency_mhz": None,
+        "channel_step_khz": None,
+        "occupied_bandwidth_khz": None,
+        "power_w": None,
+        "channel_count": None,
+        "range_km": "卫星覆盖",
+        "waveform_or_access": "窄带移动卫星；具体频道和接入计划未公开",
+        "mobility": "背负、车载、舰载、机载终端",
+        "assignment_mode": "卫星下行频道/网络资源",
+        "planning_relation": "超视距关键链路；下行与地面/航空业务共存",
+        "parameter_status": "公开精确历史范围",
+        "confidence": "高",
+        "source_org": "NTIA",
+        "source_title": "225-328.6 MHz Federal Spectrum Use Report",
+        "source_url": "https://www.ntia.gov/files/ntia/publications/compendium/0225.00-0328.60_01MAR14.pdf",
+        "evidence_note": "NTIA公开FLTSATCOM历史下行范围。",
+        "usage_boundary": "历史系统范围，不收录当前卫星频道计划或实际任务网络。",
+    },
+    {
+        "parameter_id": "PAR-UHF-SATCOM-UP",
+        "system_or_service": "FLTSATCOM/UHF移动卫星上行参考",
+        "mission_role": "战术和战略窄带卫星通信上行",
+        "case_links": "CASE-OEF-2001; CASE-OIF-2003",
+        "frequency_start_mhz": 292.85,
+        "frequency_end_mhz": 317.325,
+        "center_frequency_mhz": None,
+        "channel_step_khz": None,
+        "occupied_bandwidth_khz": None,
+        "power_w": None,
+        "channel_count": None,
+        "range_km": "卫星覆盖",
+        "waveform_or_access": "窄带移动卫星；具体频道和接入计划未公开",
+        "mobility": "背负、车载、舰载、机载终端",
+        "assignment_mode": "卫星上行频道/网络资源",
+        "planning_relation": "超视距关键链路；上行发射需区域和时段授权",
+        "parameter_status": "公开精确历史范围",
+        "confidence": "高",
+        "source_org": "NTIA",
+        "source_title": "225-328.6 MHz Federal Spectrum Use Report",
+        "source_url": "https://www.ntia.gov/files/ntia/publications/compendium/0225.00-0328.60_01MAR14.pdf",
+        "evidence_note": "NTIA公开FLTSATCOM历史上行范围。",
+        "usage_boundary": "历史系统范围，不收录当前卫星频道计划或实际任务网络。",
+    },
+    {
+        "parameter_id": "PAR-WGS-X",
+        "system_or_service": "WGS X-band业务类别",
+        "mission_role": "全球高容量军事卫星通信",
+        "case_links": "",
+        "frequency_start_mhz": None,
+        "frequency_end_mhz": None,
+        "center_frequency_mhz": None,
+        "channel_step_khz": None,
+        "occupied_bandwidth_khz": None,
+        "power_w": None,
+        "channel_count": None,
+        "range_km": "全球覆盖",
+        "waveform_or_access": "WGS提供X-band服务；具体转发器参数未公开",
+        "mobility": "固定、可搬移、地面/空中/舰载终端",
+        "assignment_mode": "卫星带宽/波束资源",
+        "planning_relation": "高容量骨干链路；需带宽、波束和终端能力联合规划",
+        "parameter_status": "公开频段类别边界",
+        "confidence": "中高",
+        "source_org": "U.S. Space Force / U.S. Army",
+        "source_title": "Wideband Global SATCOM Fact Sheet; D3SOE Handbook",
+        "source_url": "https://www.spaceforce.mil/about-us/fact-sheets/article/2197740/wideband-global-satcom-satellite/ | https://api.army.mil/e2/c/downloads/2023/01/19/7f7281ee/18-28-operating-in-a-denied-degraded-and-disrupted-space-operational-environment-handbook-jun-18-public.pdf",
+        "evidence_note": "Space Force确认WGS提供X/Ka业务；8-12 GHz来自陆军公开波段定义，不是WGS具体转发器范围。",
+        "usage_boundary": "不得把整个X波段直接转成WGS可用规则。",
+    },
+    {
+        "parameter_id": "PAR-WGS-KA",
+        "system_or_service": "WGS Ka-band业务类别",
+        "mission_role": "全球高容量军事卫星通信",
+        "case_links": "",
+        "frequency_start_mhz": None,
+        "frequency_end_mhz": None,
+        "center_frequency_mhz": None,
+        "channel_step_khz": None,
+        "occupied_bandwidth_khz": None,
+        "power_w": None,
+        "channel_count": None,
+        "range_km": "全球覆盖",
+        "waveform_or_access": "WGS提供Ka-band服务；具体转发器参数未公开",
+        "mobility": "固定、可搬移、地面/空中/舰载终端",
+        "assignment_mode": "卫星带宽/波束资源",
+        "planning_relation": "高容量骨干和广播；需考虑雨衰及终端口径",
+        "parameter_status": "公开频段类别边界",
+        "confidence": "中高",
+        "source_org": "U.S. Space Force / U.S. Army",
+        "source_title": "Wideband Global SATCOM Fact Sheet; D3SOE Handbook",
+        "source_url": "https://www.spaceforce.mil/about-us/fact-sheets/article/2197740/wideband-global-satcom-satellite/ | https://api.army.mil/e2/c/downloads/2023/01/19/7f7281ee/18-28-operating-in-a-denied-degraded-and-disrupted-space-operational-environment-handbook-jun-18-public.pdf",
+        "evidence_note": "27-40 GHz是公开Ka波段定义，不是WGS具体上下行或转发器范围。",
+        "usage_boundary": "不得把整个Ka波段直接转成WGS可用规则。",
+    },
+    {
+        "parameter_id": "PAR-UAS-CNPC-5030",
+        "system_or_service": "UAS CNPC公共规划参考",
+        "mission_role": "非隔离空域无人机安全控制与非载荷通信",
+        "case_links": "",
+        "frequency_start_mhz": 5030.0,
+        "frequency_end_mhz": 5091.0,
+        "center_frequency_mhz": None,
+        "channel_step_khz": None,
+        "occupied_bandwidth_khz": None,
+        "power_w": None,
+        "channel_count": None,
+        "range_km": "地面视距链路",
+        "waveform_or_access": "高完整性CNPC；具体标准参数另行建模",
+        "mobility": "无人机/远程控制中心",
+        "assignment_mode": "安全控制链路",
+        "planning_relation": "飞控高可靠链路，应与载荷数据分离并设置最高保障级",
+        "parameter_status": "公开规划频段",
+        "confidence": "高",
+        "source_org": "NTIA / FAA",
+        "source_title": "5030-5250 MHz Spectrum Compendium; UAS NAS Integration Roadmap",
+        "source_url": "https://www.ntia.gov/files/ntia/publications/compendium/5030.00-5250.00-02092021.pdf | https://www.faa.gov/sites/faa.gov/files/uas/resources/policy_library/Second_Edition_Integration_of_Civil_UAS_NAS_Roadmap_July%25202018.pdf",
+        "evidence_note": "5030-5091 MHz是CNPC公共规划频段，不是伊拉克/阿富汗战例频率。",
+        "usage_boundary": "仅作未来控制链路和数据模型参考。",
+    },
+    {
+        "parameter_id": "PAR-UAS-TELEMETRY-2200",
+        "system_or_service": "航空/UAS试验遥测参考",
+        "mission_role": "飞行试验遥测、高分辨率视频和无人飞行器测试",
+        "case_links": "",
+        "frequency_start_mhz": 2200.0,
+        "frequency_end_mhz": 2290.0,
+        "center_frequency_mhz": None,
+        "channel_step_khz": None,
+        "occupied_bandwidth_khz": None,
+        "power_w": None,
+        "channel_count": None,
+        "range_km": None,
+        "waveform_or_access": "航空遥测；高分辨率视频需求",
+        "mobility": "试验航空器/UAS与地面站",
+        "assignment_mode": "遥测频道/连续带宽",
+        "planning_relation": "试验任务时段化占用；需与空间业务协调",
+        "parameter_status": "公开业务频段",
+        "confidence": "高",
+        "source_org": "NTIA",
+        "source_title": "2200-2290 MHz Federal Spectrum Use Report",
+        "source_url": "https://www.ntia.gov/files/ntia/publications/compendium/2200.00-2290.00_01MAY15.pdf",
+        "evidence_note": "NTIA明确DoD和商业飞行试验、高分辨率视频及无人飞行器测试需求。",
+        "usage_boundary": "试验遥测频段，不代表作战UAS实际控制或载荷链路。",
+    },
 ]
+
+
+PARAMETER_METADATA = {
+    "PAR-SINCGARS": ("equipment_range", "SRC-01", "海湾战争地面战斗网装备基线"),
+    "PAR-MIL-AIR-VOICE": ("service_plan", "SRC-11", "军用航空话音业务规划参考"),
+    "PAR-EPLRS": ("system_band", "SRC-08", "战术位置报告与数据分发系统基线"),
+    "PAR-LINK16": ("system_band", "SRC-09; SRC-10", "联合战术数据链系统基线"),
+    "PAR-GPS-L5": ("protected_center", "SRC-09", "PNT敏感接收业务保护对象"),
+    "PAR-GPS-L2": ("protected_center", "SRC-09", "PNT敏感接收业务保护对象"),
+    "PAR-GPS-L1": ("protected_center", "SRC-09", "PNT敏感接收业务保护对象"),
+    "PAR-UAS-C-KU": ("category_only", "SRC-05", "伊拉克/阿富汗无人系统公开类别"),
+    "PAR-TRR-4400": ("coexistence_study_band", "SRC-23", "频谱迁移与共存评估参考"),
+    "PAR-RADAR-TPQ53": ("equipment_range", "SRC-13", "伊拉克/阿富汗时期后段反炮兵雷达能力参考"),
+    "PAR-RADAR-SENTINEL": ("category_only", "SRC-14; SRC-24", "后伊拉克战争时期防空雷达能力参考"),
+    "PAR-RADAR-SURVEILLANCE-2700": ("service_allocation", "SRC-15", "通用雷达共存基线"),
+    "PAR-RADAR-MARITIME-2900": ("service_allocation", "SRC-16", "通用海上雷达共存基线"),
+    "PAR-UHF-SATCOM-DOWN": ("historical_system_range", "SRC-17", "OEF/OIF超视距通信需求背景"),
+    "PAR-UHF-SATCOM-UP": ("historical_system_range", "SRC-17", "OEF/OIF超视距通信需求背景"),
+    "PAR-WGS-X": ("category_only", "SRC-18; SRC-19", "后OEF/OIF宽带卫星通信能力参考"),
+    "PAR-WGS-KA": ("category_only", "SRC-18; SRC-19", "后OEF/OIF宽带卫星通信能力参考"),
+    "PAR-UAS-CNPC-5030": ("planned_service_allocation", "SRC-20; SRC-22", "未来无人机安全控制链路参考"),
+    "PAR-UAS-TELEMETRY-2200": ("service_allocation", "SRC-21", "无人机试验与鉴定业务参考"),
+}
+
+for parameter in PUBLIC_PARAMETERS:
+    frequency_scope, source_ids, baseline_context = PARAMETER_METADATA[parameter["parameter_id"]]
+    parameter["frequency_scope"] = frequency_scope
+    parameter["source_ids"] = source_ids
+    parameter["baseline_context"] = baseline_context
 
 
 FIELD_DICTIONARY = [
     ("case_id / parameter_id", "稳定记录编号", "用于来源追踪和后续增量更新"),
     ("operation / case_links", "战例及关联", "参数关联到需求背景，不代表战例实际使用了系统全部调谐范围"),
-    ("frequency_start_mhz / frequency_end_mhz", "公开工作范围", "仅在来源明确给出时填写"),
+    ("frequency_start_mhz / frequency_end_mhz", "公开数值范围", "仅在来源明确给出时填写；必须结合frequency_scope解释"),
     ("center_frequency_mhz", "公开中心频率", "适用于GPS等保护对象"),
     ("channel_step_khz", "频道间隔或规划步进", "来源未明确时留空；不得用设备带宽替代"),
     ("occupied_bandwidth_khz", "单项占用带宽", "来源未明确时留空"),
     ("power_w", "公开功率或范围", "型号差异明显或未公开时留空"),
+    ("frequency_scope", "频率数值语义", "equipment_range / system_band / service_allocation / service_plan / protected_center / category_only / historical_system_range / planned_service_allocation / coexistence_study_band"),
     ("parameter_status", "披露粒度", "公开精确范围 / 公开业务规划范围 / 仅公开频段类别"),
+    ("source_ids", "来源目录编号", "一个或多个SRC-*编号；必须能在来源目录中解析"),
+    ("baseline_context", "参考背景", "用于保存非战例外键的时代、能力或共存背景"),
     ("usage_boundary", "使用边界", "防止把工作范围误当授权或实际行动频道"),
     ("confidence", "证据置信度", "高=政府原始资料直接支持；中=政府资料中的评估或汇总"),
 ]
@@ -349,6 +631,18 @@ SOURCES = [
     ("SRC-10", "U.S. Army", "FM 3-01 Air and Missile Defense Operations", "Link 16离散频率数和公开速率", "https://rdl.train.army.mil/catalog-ws/view/100.ATSC/C01CC9C1-DA1C-4D5E-A6EB-5FCFAE218DCD-1398170439966/fm3_01.pdf", "公开条令"),
     ("SRC-11", "U.S. DOT / NTIA", "Transportation Strategic Spectrum Plan", "军用航空空地业务规划参数", "https://www.ntia.gov/sites/default/files/publications/transportation_strategic_spectrum_plan_nov2007_0.pdf", "政府规划资料"),
     ("SRC-12", "GAO", "GAO-26-107873 Spectrum Management", "频率申请数据包含地点、时间、频段和持续时长", "https://files.gao.gov/reports/GAO-26-107873/index.html", "政府审计"),
+    ("SRC-13", "U.S. Army ODIN", "AN/TPQ-53 Counterfire Radar", "Q-53 S波段和公开覆盖距离", "https://odin.t2com.army.mil/WEG/Asset/6ea3c7edc1d7b3bab022f375761f3ee6", "军方公开数据库"),
+    ("SRC-14", "U.S. Army Acquisition", "Program Portfolio 2024", "Sentinel项目与X波段能力背景", "https://api.army.mil/e2/c/downloads/2024/07/19/ab2038a9/u-s-army-portfolio-2024.pdf", "军方项目资料"),
+    ("SRC-15", "NTIA", "2700-2900 MHz Federal Spectrum Use Report", "监视雷达和频率协调", "https://www.ntia.gov/files/ntia/publications/compendium/2700.00-2900.00_01MAR14.pdf", "政府频谱报告"),
+    ("SRC-16", "NTIA", "2900-3100 MHz Federal Spectrum Use Report", "海上和军用雷达用途", "https://www.ntia.gov/files/ntia/publications/compendium/2900.00-3100.00_01MAY15.pdf", "政府频谱报告"),
+    ("SRC-17", "NTIA", "225-328.6 MHz Federal Spectrum Use Report", "FLTSATCOM历史上下行范围", "https://www.ntia.gov/files/ntia/publications/compendium/0225.00-0328.60_01MAR14.pdf", "政府频谱报告"),
+    ("SRC-18", "U.S. Space Force", "Wideband Global SATCOM Fact Sheet", "WGS X/Ka波段业务", "https://www.spaceforce.mil/about-us/fact-sheets/article/2197740/wideband-global-satcom-satellite/", "军方事实页"),
+    ("SRC-19", "U.S. Army", "D3SOE Handbook", "公开通信波段边界与典型系统", "https://api.army.mil/e2/c/downloads/2023/01/19/7f7281ee/18-28-operating-in-a-denied-degraded-and-disrupted-space-operational-environment-handbook-jun-18-public.pdf", "公开手册"),
+    ("SRC-20", "NTIA / FAA", "5030-5250 MHz Spectrum Compendium", "UAS CNPC 5030-5091 MHz", "https://www.ntia.gov/files/ntia/publications/compendium/5030.00-5250.00-02092021.pdf", "政府频谱报告"),
+    ("SRC-21", "NTIA", "2200-2290 MHz Federal Spectrum Use Report", "航空/UAS试验遥测", "https://www.ntia.gov/files/ntia/publications/compendium/2200.00-2290.00_01MAY15.pdf", "政府频谱报告"),
+    ("SRC-22", "FAA", "Integration of Civil UAS in the National Airspace System Roadmap", "UAS CNPC安全关键用途与5030-5091 MHz规划", "https://www.faa.gov/sites/faa.gov/files/uas/resources/policy_library/Second_Edition_Integration_of_Civil_UAS_NAS_Roadmap_July%25202018.pdf", "政府路线图"),
+    ("SRC-23", "U.S. Department of Defense / NTIA", "DoD 4400-4940 MHz Band Assessment", "战术中继与其他系统的迁移和共存评估", "https://www.ntia.gov/sites/default/files/publications/dodassessment_0.pdf", "政府频谱评估"),
+    ("SRC-24", "U.S. Army Acquisition Support Center", "Acquisition partnership to roll out new improved Sentinel Radar", "AN/MPQ-64A3三维X波段、360度和75 km", "https://asc.army.mil/web/access-acquisition-partnership-to-roll-out-new-improved-sentinel-radar/", "军方采办文章"),
 ]
 
 
@@ -401,13 +695,51 @@ def add_sheet(workbook, name, rows, headers=None, table_name=None):
     return sheet
 
 
+def validate_records():
+    case_ids = {record["case_id"] for record in BATTLE_CASES}
+    parameter_ids = {record["parameter_id"] for record in PUBLIC_PARAMETERS}
+    source_by_id = {record[0]: record[4] for record in SOURCES}
+    allowed_scopes = {
+        "equipment_range",
+        "system_band",
+        "service_allocation",
+        "service_plan",
+        "protected_center",
+        "category_only",
+        "historical_system_range",
+        "planned_service_allocation",
+        "coexistence_study_band",
+    }
+
+    assert len(case_ids) == len(BATTLE_CASES), "Duplicate case_id"
+    assert len(parameter_ids) == len(PUBLIC_PARAMETERS), "Duplicate parameter_id"
+    assert len(source_by_id) == len(SOURCES), "Duplicate source_id"
+    assert parameter_ids == set(PARAMETER_METADATA), "Parameter metadata coverage mismatch"
+
+    for parameter in PUBLIC_PARAMETERS:
+        linked_cases = {value.strip() for value in parameter["case_links"].split(";") if value.strip()}
+        assert linked_cases <= case_ids, f"Unknown case link: {parameter['parameter_id']}"
+        assert parameter["frequency_scope"] in allowed_scopes, f"Unknown frequency scope: {parameter['parameter_id']}"
+        if parameter["frequency_scope"] == "category_only":
+            assert parameter["frequency_start_mhz"] is None and parameter["frequency_end_mhz"] is None, (
+                f"Category-only record has numeric range: {parameter['parameter_id']}"
+            )
+        linked_sources = {value.strip() for value in parameter["source_ids"].split(";") if value.strip()}
+        assert linked_sources and linked_sources <= set(source_by_id), f"Unknown source link: {parameter['parameter_id']}"
+        for source_id in linked_sources:
+            assert source_by_id[source_id] in parameter["source_url"], (
+                f"Source URL mismatch: {parameter['parameter_id']} -> {source_id}"
+            )
+
+
 def build_workbook(output=OUTPUT):
+    validate_records()
     workbook = Workbook()
     workbook.remove(workbook.active)
 
     boundary = workbook.create_sheet("数据边界")
     notes = [
-        ("项目", "美军公开战例与用频参数基线（第一批）"),
+        ("项目", "美军公开战例与用频参数基线（第一、二批）"),
         ("更新日期", "2026-07-10"),
         ("用途", "需求建模、算法测试、仿真样例设计"),
         ("禁止解释", "系统调谐范围不等于战例实际频道；公开频段不等于本项目获得使用授权"),
@@ -449,6 +781,7 @@ def build_workbook(output=OUTPUT):
     assert check.sheetnames == ["数据边界", "战例基线", "公开用频参数", "字段字典", "来源目录"]
     assert check["战例基线"].max_row == len(BATTLE_CASES) + 1
     assert check["公开用频参数"].max_row == len(PUBLIC_PARAMETERS) + 1
+    assert check["来源目录"].max_row == len(SOURCES) + 1
     return output
 
 
