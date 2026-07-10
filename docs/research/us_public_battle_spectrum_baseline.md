@@ -1,4 +1,4 @@
-# 美军公开战例与用频参数基线（第一、二批）
+# 美军公开战例与用频参数基线（第一至三批）
 
 更新日期：2026-07-10
 
@@ -115,6 +115,34 @@
 - 每条参数需保留 `frequency_scope`、`source_ids`、披露状态和证据等级；规划器只能把经过授权或人工确认的记录转换为可用规则。
 - `case_links` 只允许填写现有 `CASE-*` 编号；时代背景、能力背景和共存背景统一放入 `baseline_context`，避免形成虚假战例关联。
 
+## 第三批：2016-2026 近十年战例与演训样例
+
+| 战例/样例 | 类型 | 公开事实与主要问题 | 对平台的需求映射 |
+| --- | --- | --- | --- |
+| 摩苏尔战役 / Operation Eagle Strike（2016-2017） | 实战行动 | 城市频谱拥塞且持续变化；UAS/C-UAS快速演进；部分C-UAS能力会同时影响友军和对手系统 | 城市遮挡、高密度发射源、友军干扰、UAS/C-UAS联动、保护区和阶段化重筹 |
+| OIR叙利亚受干扰环境（2018） | 实战行动 | 空军执行通信对抗任务；公开审计材料指出通信链路曾在强电子干扰环境下反复受影响 | PACE多链路、链路失效事件、任务降级、恢复时间、重传和连续性 |
+| 喀布尔撤离 / Operation Allies Refuge（2021） | 非战斗人员撤离 | 美军接管机场空管并组织17天昼夜空运；高峰期约每34分钟一架军机离场，多国和商业航空同时参与 | 高密度时隙、机场局部拥塞、航空链路优先级、节点突增、威胁与医疗事件重筹 |
+| 红海防空与护航 / Operation Prosperity Guardian（2023-2024公开资料截点） | 实战行动 | 狭窄繁忙航道中的多国护航、商船持续双向通信以及无人机/导弹/无人艇威胁；行动建立前的USS Carney先导交战持续约10小时 | 舰船机动、传感器覆盖重叠、多目标突发、多国互操作、商军通信隔离和防空优先级 |
+| OIR基地反无人机部署（2023-2024） | 实战行动 | Q-50/Q-53/Q-64与FAAD C2、联合数据网形成多传感器态势；专业人员、承包保障和操作员数量构成约束 | 传感器覆盖、融合节点容量、近实时数据、操作员负荷、固定/机动防护和序列威胁 |
+| Project Convergence Capstone 4（2024） | 联合实验，非实战 | 超过4000名参与者使用现役、实验和商业通信方法组成混合网络，验证跨军种和多国数据交换 | 异构网络、带宽受限、伙伴接入、数据优先级、节点失联和传感器-效应器动态匹配 |
+
+第三批在工作簿中新增 `case_type`、`phase_model`、`dynamic_events` 和战例级 `source_ids`。其中任务阶段用于生成仿真骨架，不等同于历史行动时间表；演训事件必须标记为 `joint_experiment`。
+
+## 第三批公开参数
+
+| 系统/业务 | 公开频率信息 | 其他公开参数 | 数据边界 |
+| --- | --- | --- | --- |
+| AN/PRC-158 | 数值调谐范围未公开 | 双通道；窄带最高10 W、SATCOM/宽带最高20 W；UHF SATCOM支持5/25 kHz频道类别 | 只保存能力和公开上限，不保存网络预置、跳频或任务频道 |
+| MUOS频段A | 243.525-270.050 MHz | WCDMA与传统UHF兼容 | 与频段B分条保存；不推定上下行方向和频道计划 |
+| MUOS频段B | 280-320 MHz | GAO称系统容量可较传统系统提高约10倍 | 不能与频段A合并成连续范围；10倍不是单用户保证速率 |
+| AN/TPQ-50 | 仅公开L波段类别，数值字段留空 | 360度；条令定位范围0.5-10 km；ODIN称最高约15 km取决于目标和轨迹 | ODIN的1200 W是供电需求，不是射频功率 |
+| KuRFS | 仅公开Ku波段类别，数值字段留空 | 360度；固定、半固定或车载；支持C-UAS探测与效应器引导 | 不写入通用Ku波段边界、探测门限和电子攻击参数 |
+| AN/SPY-6(V)1 | 仅公开S波段类别，数值字段留空 | 四阵面、每阵37个RMA；公开相对灵敏度SPY+16 dB | 相对能力不是绝对接收门限，不与特定红海参战舰艇绑定 |
+| DoD混合SATCOM | 无统一频率范围 | 终端、地面站、卫星、网络和用户的多路径组合 | 用于资源编排模型，不代表容量或频段已经获得授权 |
+| AN/PRC-160 | 1.6-60 MHz | 宽带HF；公开最高数据率120 kbit/s | 速率是能力上限；实际链路取决于传播、时段和天线条件 |
+
+当前工作簿共包含 **11个战例/演训样例、27条公开参数和46个来源**。所有新增参数均具有 `frequency_scope`，只有设备范围或公开系统范围可保存数值；`category_only` 记录强制保持起止频率为空。
+
 ## 主要公开来源
 
 1. U.S. Army, *1992 Weapon Systems Handbook*: https://asc.army.mil/docs/wsh2/1992-wsh.pdf
@@ -141,10 +169,32 @@
 22. NTIA, *2200-2290 MHz Federal Spectrum Use Report*: https://www.ntia.gov/files/ntia/publications/compendium/2200.00-2290.00_01MAY15.pdf
 23. U.S. Department of Defense / NTIA, *DoD 4400-4940 MHz Band Assessment*: https://www.ntia.gov/sites/default/files/publications/dodassessment_0.pdf
 24. U.S. Army Acquisition Support Center, *Acquisition partnership to roll out new improved Sentinel Radar*: https://asc.army.mil/web/access-acquisition-partnership-to-roll-out-new-improved-sentinel-radar/
+25. U.S. Army TRADOC, *Mosul Study Group: What the Battle for Mosul Teaches the Force*: https://api.army.mil/e2/c/downloads/2023/01/19/e9325e8b/17-24u-mosul-study-group-what-the-battle-for-mosul-teaches-the-force-sep-17-public.pdf
+26. U.S. Air Force, *Compass Call dominates OIR with electronic warfare*: https://www.af.mil/News/Features/Article/1295655/compass-call-dominates-oir-with-electronic-warfare/
+27. GAO-21-64, *Electromagnetic Spectrum Operations*: https://www.gao.gov/assets/gao-21-64.pdf
+28. U.S. Department of Defense / USTRANSCOM, *Transportation Command Aids in Historic Evacuation*: https://www.defense.gov/News/News-Stories/Article/Article/2764916/transportation-command-aids-in-historic-evacuation/
+29. U.S. Department of State / Department of Defense, *Joint Statement on Afghanistan*: https://www.defense.gov/News/Releases/Release/Article/2732053/joint-statement-from-the-department-of-state-and-department-of-defense-update-o/
+30. U.S. Department of Defense / NAVCENT, *Press Briefing on Operation Prosperity Guardian*: https://www.defense.gov/News/Transcripts/Transcript/Article/3631484/navcent-commander-vice-admiral-brad-cooper-holds-an-off-camera-on-the-record-pr/
+31. U.S. Department of Defense / U.S. Navy, *Navy's Top Officer Credits Training and Logistics With Meeting Red Sea Mission*: https://www.defense.gov/News/News-Stories/Article/Article/3723681/navys-top-officer-credits-training-logistics-with-meeting-red-sea-mission/
+32. U.S. Navy, *USS Carney: a Destroyer at War*: https://www.navy.mil/Press-Office/News-Stories/display-news/Article/3984206/uss-carney-a-destroyer-at-war/
+33. U.S. Department of Defense / U.S. Army, *Network Capability Provides Successful Start to Project Convergence Capstone 4*: https://www.defense.gov/News/News-Stories/Article/Article/3692858/network-capability-provides-successful-start-to-project-convergence-capstone-4/
+34. U.S. Army CPE C2IN, *Handheld, Manpack and Small Form Fit*: https://peoc3n.army.mil/Organizations/PM-Tactical-Radios/Handheld-Manpack-and-Small-Form-Fit/
+35. U.S. Army, *ATP 6-02.53 Techniques for Tactical Radio Operations*: https://rdl.train.army.mil/catalog-ws/view/100.ATSC/0C45D378-25E0-438E-8881-749EF51DE080-1452191121290/atp6_02x53.pdf
+36. NTIA, *225-328.6 MHz Federal Spectrum Use Report*: https://www.ntia.gov/files/ntia/publications/compendium/0225.00-0328.60_21NOV14.pdf
+37. GAO-21-105283, *Satellite Communications*: https://www.gao.gov/products/gao-21-105283
+38. U.S. Army ODIN, *AN/TPQ-50 American Counterfire Radar System*: https://odin.t2com.army.mil/WEG/Asset/c57802f406c1c9733314e686c6be00ea
+39. U.S. Army, *PB 2023 Firefinder RDT&E Justification*: https://www.asafm.army.mil/Portals/72/Documents/BudgetMaterial/2023/Base%20Budget/rdte/vol_2-Budget_Activity_5C.pdf
+40. U.S. Army Military Review, *Advancing the U.S. Army's Counter-UAS Mission Command Systems*: https://www.armyupress.army.mil/Journals/Military-Review/English-Edition-Archives/May-June-2024/MJ-24-Modern-Warfare/
+41. U.S. Navy, *Air and Missile Defense Radar Fact File*: https://www.navy.mil/Resources/Fact-Files/Display-FactFiles/Article/2166758/air-and-missile-defense-radar-amdr/
+42. U.S. Navy, *FY 2018 Shipbuilding and Conversion Budget*: https://www.secnav.navy.mil/fmc/fmb/Documents/18pres/SCN_Book.pdf
+43. GAO-25-107034, *DOD Satellite Communications*: https://files.gao.gov/reports/GAO-25-107034/index.html
+44. U.S. Army Military Review, *C-UAS Operations*: https://www.armyupress.army.mil/Portals/7/military-review/Archives/English/JA-24/C-UAS%20Operations/C-UAS-Operations-UA.pdf
+45. U.S. Army Armor, *Adapting to Multi-Domain Battlefield: Developing Emissions Control SOP*: https://www.lineofdeparture.army.mil/Journals/Armor/Armor-Archive/Spring-2025-Edition/Adapting-to-the-Multi-Domain-Battlefield/
+46. U.S. Army CPE C2IN, *Helicopter and Multi-Mission Radios*: https://peoc3n.army.mil/Organizations/PM-Tactical-Radios/Helicopter-and-Multi-Mission-Radios/
 
 ## 下一批需要补充
 
-- 从公开材料提炼任务阶段、时间窗、机动范围、节点依赖和保障优先级，形成可导入的任务模板。
-- 补充公开的干扰共存与保护准则，重点是接收机门限、频率-距离隔离、保护区和风险等级，不收集干扰装备的实战操作参数。
-- 建立平台数据字典，将战例、装备能力、频谱授权、链路需求和事件变化分层存储。
-- 建立独立 `SIM-*` 仿真参数库，用合成频点、功率、带宽和位置验证规划算法，避免把公开装备能力直接当作行动用频规则。
+- 将摩苏尔、喀布尔撤离、OIR基地反无人机和红海护航转换为可导入的任务模板，使用合成节点和 `SIM-*` 频率。
+- 增加 Northern Edge 23-2、Valiant Shield 24 和 RIMPAC 24 演训样例，重点验证真实公开的链路中断、空中中继和多阶段资源竞争。
+- 补充公开的接收机抗干扰、频率-距离隔离和保护区规则，形成确定性冲突评估输入。
+- 为每个模板建立“公开事实字段”和“仿真假设字段”双层结构，禁止算法将能力范围直接当作授权资源。
