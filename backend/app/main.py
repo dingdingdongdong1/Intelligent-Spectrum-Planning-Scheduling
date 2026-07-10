@@ -12,9 +12,11 @@ from sqlmodel import Session, select
 from .database import get_session, init_db
 from .models import AuditLog, FrequencyRule, PlanningRun, Project
 from .schemas import (
+    EquipmentGroupPayload,
     EquipmentLibraryItemResponse,
     ChatRequest,
     ChatResponse,
+    MissionTaskPayload,
     PlanRequest,
     PlanResponse,
     ParametricTaskDemoRequest,
@@ -22,12 +24,15 @@ from .schemas import (
     ProjectRead,
     RulePayload,
     SpectrumRulePayload,
+    TaskLinkPayload,
+    TaskPhasePayload,
     TaskCapacityBatchRequest,
     TaskCapacityRiskClosureRequest,
     TaskObjectiveResponse,
     TaskReplanRequest,
     TaskSampleCatalogResponse,
     TaskScenarioResponse,
+    TaskUnitPayload,
     ValidationResponse,
 )
 from .services.chat import parse_chat_instruction
@@ -70,6 +75,7 @@ from .services.equipment_planning import (
     validate_task_inputs,
 )
 from .services.task_catalog import TASK_OBJECTIVES
+from .services import task_workbench
 from .services.excel_io import (
     build_equipment_group_template,
     build_rule_template,
@@ -372,10 +378,186 @@ async def upload_spectrum_rules(project_id: int, file: UploadFile = File(...), s
 def task_data(project_id: int, session: Session = Depends(get_session)) -> dict:
     _require_project(session, project_id)
     return {
+        "mission": task_workbench.get_mission(session, project_id),
+        "phases": task_workbench.list_phases(session, project_id),
+        "links": task_workbench.list_links(session, project_id),
         "task_units": db_task_units_to_dicts(session, project_id),
         "equipment_groups": db_equipment_groups_to_dicts(session, project_id),
         "spectrum_rules": db_spectrum_rules_to_dicts(session, project_id),
     }
+
+
+@app.get("/api/projects/{project_id}/task-mission")
+def task_mission_get(project_id: int, session: Session = Depends(get_session)) -> dict | None:
+    return task_workbench.get_mission(session, project_id)
+
+
+@app.put("/api/projects/{project_id}/task-mission")
+def task_mission_put(
+    project_id: int,
+    payload: MissionTaskPayload,
+    session: Session = Depends(get_session),
+) -> dict:
+    return task_workbench.upsert_mission(session, project_id, payload.model_dump())
+
+
+@app.get("/api/projects/{project_id}/task-phases")
+def task_phases_get(project_id: int, session: Session = Depends(get_session)) -> list[dict]:
+    return task_workbench.list_phases(session, project_id)
+
+
+@app.post("/api/projects/{project_id}/task-phases")
+def task_phases_post(
+    project_id: int,
+    payload: TaskPhasePayload,
+    session: Session = Depends(get_session),
+) -> dict:
+    return task_workbench.create_phase(session, project_id, payload.model_dump())
+
+
+@app.put("/api/projects/{project_id}/task-phases/{row_id}")
+def task_phases_put(
+    project_id: int,
+    row_id: int,
+    payload: TaskPhasePayload,
+    session: Session = Depends(get_session),
+) -> dict:
+    return task_workbench.update_phase(session, project_id, row_id, payload.model_dump())
+
+
+@app.delete("/api/projects/{project_id}/task-phases/{row_id}")
+def task_phases_delete(project_id: int, row_id: int, session: Session = Depends(get_session)) -> dict:
+    task_workbench.delete_phase(session, project_id, row_id)
+    return {"ok": True}
+
+
+@app.get("/api/projects/{project_id}/task-units")
+def task_units_get(project_id: int, session: Session = Depends(get_session)) -> list[dict]:
+    return task_workbench.list_task_units(session, project_id)
+
+
+@app.post("/api/projects/{project_id}/task-units")
+def task_units_post(
+    project_id: int,
+    payload: TaskUnitPayload,
+    session: Session = Depends(get_session),
+) -> dict:
+    return task_workbench.create_task_unit(session, project_id, payload.model_dump())
+
+
+@app.put("/api/projects/{project_id}/task-units/{row_id}")
+def task_units_put(
+    project_id: int,
+    row_id: int,
+    payload: TaskUnitPayload,
+    session: Session = Depends(get_session),
+) -> dict:
+    return task_workbench.update_task_unit(session, project_id, row_id, payload.model_dump())
+
+
+@app.delete("/api/projects/{project_id}/task-units/{row_id}")
+def task_units_delete(project_id: int, row_id: int, session: Session = Depends(get_session)) -> dict:
+    task_workbench.delete_task_unit(session, project_id, row_id)
+    return {"ok": True}
+
+
+@app.get("/api/projects/{project_id}/equipment-groups")
+def equipment_groups_get(project_id: int, session: Session = Depends(get_session)) -> list[dict]:
+    return task_workbench.list_equipment_groups(session, project_id)
+
+
+@app.post("/api/projects/{project_id}/equipment-groups")
+def equipment_groups_post(
+    project_id: int,
+    payload: EquipmentGroupPayload,
+    session: Session = Depends(get_session),
+) -> dict:
+    return task_workbench.create_equipment_group(session, project_id, payload.model_dump())
+
+
+@app.put("/api/projects/{project_id}/equipment-groups/{row_id}")
+def equipment_groups_put(
+    project_id: int,
+    row_id: int,
+    payload: EquipmentGroupPayload,
+    session: Session = Depends(get_session),
+) -> dict:
+    return task_workbench.update_equipment_group(session, project_id, row_id, payload.model_dump())
+
+
+@app.delete("/api/projects/{project_id}/equipment-groups/{row_id}")
+def equipment_groups_delete(project_id: int, row_id: int, session: Session = Depends(get_session)) -> dict:
+    task_workbench.delete_equipment_group(session, project_id, row_id)
+    return {"ok": True}
+
+
+@app.get("/api/projects/{project_id}/task-links")
+def task_links_get(project_id: int, session: Session = Depends(get_session)) -> list[dict]:
+    return task_workbench.list_links(session, project_id)
+
+
+@app.post("/api/projects/{project_id}/task-links")
+def task_links_post(
+    project_id: int,
+    payload: TaskLinkPayload,
+    session: Session = Depends(get_session),
+) -> dict:
+    return task_workbench.create_link(session, project_id, payload.model_dump())
+
+
+@app.put("/api/projects/{project_id}/task-links/{row_id}")
+def task_links_put(
+    project_id: int,
+    row_id: int,
+    payload: TaskLinkPayload,
+    session: Session = Depends(get_session),
+) -> dict:
+    return task_workbench.update_link(session, project_id, row_id, payload.model_dump())
+
+
+@app.delete("/api/projects/{project_id}/task-links/{row_id}")
+def task_links_delete(project_id: int, row_id: int, session: Session = Depends(get_session)) -> dict:
+    task_workbench.delete_link(session, project_id, row_id)
+    return {"ok": True}
+
+
+@app.post("/api/projects/{project_id}/import-task-package")
+async def import_task_package(
+    project_id: int,
+    task_units: UploadFile = File(...),
+    equipment_groups: UploadFile = File(...),
+    spectrum_rules: UploadFile = File(...),
+    session: Session = Depends(get_session),
+) -> dict:
+    _require_project(session, project_id)
+    try:
+        parsed_task_units = parse_task_unit_excel(await task_units.read())
+        parsed_equipment_groups = parse_equipment_group_excel(await equipment_groups.read())
+        parsed_spectrum_rules = parse_spectrum_rule_excel(await spectrum_rules.read())
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Unable to parse task package: {exc}") from exc
+
+    _require_complete_upload(parsed_task_units, "Task units", ("task_unit_id", "name", "unit_type"))
+    _require_complete_upload(
+        parsed_equipment_groups,
+        "Equipment groups",
+        ("equipment_group_id", "task_unit_id", "equipment_type", "bandwidth_khz"),
+    )
+    _require_complete_upload(
+        parsed_spectrum_rules,
+        "Spectrum rules",
+        ("rule_id", "rule_type", "band_group", "start_mhz", "end_mhz"),
+    )
+    _require_valid_task_unit_upload(parsed_task_units.records)
+    _require_valid_equipment_group_upload(parsed_equipment_groups.records, parsed_task_units.records)
+    _require_valid_spectrum_rule_upload(parsed_spectrum_rules.records)
+    return task_workbench.replace_task_package(
+        session,
+        project_id,
+        parsed_task_units.records,
+        parsed_equipment_groups.records,
+        parsed_spectrum_rules.records,
+    )
 
 
 @app.get("/api/projects/{project_id}/spectrum-rules")

@@ -18,3 +18,5 @@ coverage/
 .env.local
 artifacts/
 .sites-git-backup/
+.playwright-cli/
+output/playwright/

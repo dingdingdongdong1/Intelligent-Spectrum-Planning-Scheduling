@@ -6,8 +6,10 @@
 
 ## 第一阶段功能
 
-- 任务单元管理：创建项目，生成作战/演训样例，导入任务单元 Excel。
-- 装备组管理：导入装备组，维护装备类型、数量、带宽、功率、优先级和机动属性。
+- 任务筹划工作台：从零维护任务信息、任务阶段、时段地域、任务单元、装备组和任务链路。
+- 任务单元管理：支持逐项增删改、作战/演训样例生成、参数化样例和 Excel 导入。
+- 装备组管理：维护装备类型、数量、带宽、功率、优先级、机动属性和任务归属。
+- 数据整体导入：任务单元、装备组和频谱规则三表跨表校验并在单个事务中提交。
 - 频谱规则管理：维护可用、禁用、保护、固定占用等频段规则。
 - 自动用频规划：按任务保障、干扰最低、带宽节约、高优先级装备优先等目标生成方案。
 - 干扰风险评估：输出同频/邻频风险、瓶颈频段、冲突理由和解释链。
@@ -73,6 +75,12 @@ GET http://127.0.0.1:8000/api/phase-one-capabilities
 - `GET /api/task-objectives`
 - `GET /api/task-scenarios`
 - `POST /api/projects/{id}/generate-task-demo`
+- `GET|PUT /api/projects/{id}/task-mission`
+- `GET|POST /api/projects/{id}/task-phases`
+- `GET|POST /api/projects/{id}/task-units`
+- `GET|POST /api/projects/{id}/equipment-groups`
+- `GET|POST /api/projects/{id}/task-links`
+- `POST /api/projects/{id}/import-task-package`
 - `POST /api/projects/{id}/upload-task-units`
 - `POST /api/projects/{id}/upload-equipment-groups`
 - `POST /api/projects/{id}/upload-spectrum-rules`

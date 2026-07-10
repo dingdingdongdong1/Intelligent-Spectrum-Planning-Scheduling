@@ -9,10 +9,109 @@ export type Project = {
 };
 
 export type TaskProjectData = {
-  task_units: Array<Record<string, unknown>>;
-  equipment_groups: Array<Record<string, unknown>>;
-  spectrum_rules: Array<Record<string, unknown>>;
+  mission: MissionTaskRecord | null;
+  phases: TaskPhaseRecord[];
+  links: TaskLinkRecord[];
+  task_units: TaskUnitRecord[];
+  equipment_groups: EquipmentGroupRecord[];
+  spectrum_rules: TaskSpectrumRuleRecord[];
 };
+
+export type MissionTaskPayload = {
+  mission_id: string;
+  name: string;
+  mission_type: string;
+  description: string;
+  priority: number;
+  required_assurance: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  region_name: string;
+  center_lat: number | null;
+  center_lon: number | null;
+  area_radius_km: number;
+  mobility_range_km: number;
+  commander_intent: string;
+  status: string;
+};
+
+export type MissionTaskRecord = MissionTaskPayload & { id: number; project_id: number };
+
+export type TaskPhasePayload = {
+  phase_id: string;
+  name: string;
+  sequence: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  status: string;
+  area_center_lat: number | null;
+  area_center_lon: number | null;
+  area_radius_km: number;
+  notes: string;
+};
+
+export type TaskPhaseRecord = TaskPhasePayload & { id: number; project_id: number };
+
+export type TaskUnitPayload = {
+  task_unit_id: string;
+  name: string;
+  unit_type: string;
+  area_center_lat: number | null;
+  area_center_lon: number | null;
+  area_radius_km: number;
+  priority: number;
+  spectrum_relation: string;
+  preferred_band_groups: string;
+  min_satisfaction_ratio: number;
+};
+
+export type TaskUnitRecord = TaskUnitPayload & { id: number; project_id: number; raw_json?: string };
+
+export type EquipmentGroupPayload = {
+  equipment_group_id: string;
+  task_unit_id: string;
+  equipment_type: string;
+  count: number;
+  tx_rx_role: string;
+  mobility: string;
+  bandwidth_khz: number;
+  tx_power_w: number;
+  antenna_gain_dbi: number;
+  antenna_height_m: number;
+  receiver_sensitivity_dbm: number;
+  modulation: string;
+  duplex_mode: string;
+  required_channels: number;
+  assignment_mode: string;
+  preferred_band_group: string;
+  priority: number;
+  protection_distance_km: number;
+  min_spacing_khz: number;
+  guard_band_khz: number;
+};
+
+export type EquipmentGroupRecord = EquipmentGroupPayload & { id: number; project_id: number; raw_json?: string };
+
+export type TaskLinkPayload = {
+  link_id: string;
+  name: string;
+  link_type: string;
+  source_task_unit_id: string | null;
+  target_task_unit_id: string | null;
+  source_equipment_group_id: string | null;
+  target_equipment_group_id: string | null;
+  direction: string;
+  priority: number;
+  required_availability: number;
+  bandwidth_khz: number;
+  required_channels: number;
+  primary_band_group: string;
+  backup_band_group: string;
+  active_phase_ids: string[];
+  notes: string;
+};
+
+export type TaskLinkRecord = TaskLinkPayload & { id: number; project_id: number };
 
 export type ValidationResult = {
   ok: boolean;
@@ -1150,6 +1249,95 @@ export async function listProjects(): Promise<Project[]> {
 
 export async function getTaskProjectData(projectId: number): Promise<TaskProjectData> {
   return request<TaskProjectData>(`/api/projects/${projectId}/task-data`);
+}
+
+export async function saveMissionTask(projectId: number, payload: MissionTaskPayload): Promise<MissionTaskRecord> {
+  return request<MissionTaskRecord>(`/api/projects/${projectId}/task-mission`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createTaskPhase(projectId: number, payload: TaskPhasePayload): Promise<TaskPhaseRecord> {
+  return request<TaskPhaseRecord>(`/api/projects/${projectId}/task-phases`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTaskPhase(projectId: number, rowId: number, payload: TaskPhasePayload): Promise<TaskPhaseRecord> {
+  return request<TaskPhaseRecord>(`/api/projects/${projectId}/task-phases/${rowId}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteTaskPhase(projectId: number, rowId: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/projects/${projectId}/task-phases/${rowId}`, { method: 'DELETE' });
+}
+
+export async function createTaskUnit(projectId: number, payload: TaskUnitPayload): Promise<TaskUnitRecord> {
+  return request<TaskUnitRecord>(`/api/projects/${projectId}/task-units`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTaskUnit(projectId: number, rowId: number, payload: TaskUnitPayload): Promise<TaskUnitRecord> {
+  return request<TaskUnitRecord>(`/api/projects/${projectId}/task-units/${rowId}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteTaskUnit(projectId: number, rowId: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/projects/${projectId}/task-units/${rowId}`, { method: 'DELETE' });
+}
+
+export async function createEquipmentGroup(projectId: number, payload: EquipmentGroupPayload): Promise<EquipmentGroupRecord> {
+  return request<EquipmentGroupRecord>(`/api/projects/${projectId}/equipment-groups`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+export async function updateEquipmentGroup(
+  projectId: number,
+  rowId: number,
+  payload: EquipmentGroupPayload,
+): Promise<EquipmentGroupRecord> {
+  return request<EquipmentGroupRecord>(`/api/projects/${projectId}/equipment-groups/${rowId}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteEquipmentGroup(projectId: number, rowId: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/projects/${projectId}/equipment-groups/${rowId}`, { method: 'DELETE' });
+}
+
+export async function createTaskLink(projectId: number, payload: TaskLinkPayload): Promise<TaskLinkRecord> {
+  return request<TaskLinkRecord>(`/api/projects/${projectId}/task-links`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTaskLink(projectId: number, rowId: number, payload: TaskLinkPayload): Promise<TaskLinkRecord> {
+  return request<TaskLinkRecord>(`/api/projects/${projectId}/task-links/${rowId}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteTaskLink(projectId: number, rowId: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/projects/${projectId}/task-links/${rowId}`, { method: 'DELETE' });
+}
+
+export async function importTaskPackage(
+  projectId: number,
+  taskUnits: File,
+  equipmentGroups: File,
+  spectrumRules: File,
+): Promise<Record<string, unknown>> {
+  const form = new FormData();
+  form.append('task_units', taskUnits);
+  form.append('equipment_groups', equipmentGroups);
+  form.append('spectrum_rules', spectrumRules);
+  return request<Record<string, unknown>>(`/api/projects/${projectId}/import-task-package`, { method: 'POST', body: form });
 }
 
 export async function uploadFile(projectId: number, kind: 'stations' | 'rules', file: File): Promise<Record<string, unknown>> {

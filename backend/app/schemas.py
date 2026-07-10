@@ -214,6 +214,92 @@ class SpectrumRulePayload(BaseModel):
     severity: str = "中"
 
 
+class MissionTaskPayload(BaseModel):
+    mission_id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    mission_type: str = ""
+    description: str = ""
+    priority: int = Field(default=1, ge=1)
+    required_assurance: float = Field(default=1.0, ge=0, le=1)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    region_name: str = ""
+    center_lat: float | None = Field(default=None, ge=-90, le=90)
+    center_lon: float | None = Field(default=None, ge=-180, le=180)
+    area_radius_km: float = Field(default=0, ge=0)
+    mobility_range_km: float = Field(default=0, ge=0)
+    commander_intent: str = ""
+    status: str = "draft"
+
+
+class TaskPhasePayload(BaseModel):
+    phase_id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    sequence: int = Field(default=0, ge=0)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    status: str = "draft"
+    area_center_lat: float | None = Field(default=None, ge=-90, le=90)
+    area_center_lon: float | None = Field(default=None, ge=-180, le=180)
+    area_radius_km: float = Field(default=0, ge=0)
+    notes: str = ""
+
+
+class TaskUnitPayload(BaseModel):
+    task_unit_id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    unit_type: str = Field(min_length=1)
+    area_center_lat: float | None = Field(default=None, ge=-90, le=90)
+    area_center_lon: float | None = Field(default=None, ge=-180, le=180)
+    area_radius_km: float = Field(default=0, ge=0)
+    priority: int = Field(default=1, ge=1)
+    spectrum_relation: str = "exclusive"
+    preferred_band_groups: str = ""
+    min_satisfaction_ratio: float = Field(default=1.0, gt=0, le=1)
+
+
+class EquipmentGroupPayload(BaseModel):
+    equipment_group_id: str = Field(min_length=1)
+    task_unit_id: str = Field(min_length=1)
+    equipment_type: str = Field(min_length=1)
+    count: int = Field(default=1, gt=0)
+    tx_rx_role: str = "duplex"
+    mobility: str = "fixed"
+    bandwidth_khz: float = Field(default=25, gt=0)
+    tx_power_w: float = Field(default=1, ge=0)
+    antenna_gain_dbi: float = 0
+    antenna_height_m: float = Field(default=1, ge=0)
+    receiver_sensitivity_dbm: float = -100
+    modulation: str = ""
+    duplex_mode: str = "simplex"
+    required_channels: int = Field(default=1, gt=0)
+    assignment_mode: str = "discrete_channels"
+    preferred_band_group: str = ""
+    priority: int = Field(default=1, ge=1)
+    protection_distance_km: float = Field(default=0, ge=0)
+    min_spacing_khz: float = Field(default=0, ge=0)
+    guard_band_khz: float = Field(default=0, ge=0)
+
+
+class TaskLinkPayload(BaseModel):
+    link_id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    link_type: str = "communication"
+    source_task_unit_id: str | None = None
+    target_task_unit_id: str | None = None
+    source_equipment_group_id: str | None = None
+    target_equipment_group_id: str | None = None
+    direction: str = "bidirectional"
+    priority: int = Field(default=1, ge=1)
+    required_availability: float = Field(default=1.0, ge=0, le=1)
+    bandwidth_khz: float = Field(default=25, gt=0)
+    required_channels: int = Field(default=1, gt=0)
+    primary_band_group: str = ""
+    backup_band_group: str = ""
+    active_phase_ids: list[str] = Field(default_factory=list)
+    notes: str = ""
+
+
 class RulePayload(BaseModel):
     band_group: str
     service_type: str

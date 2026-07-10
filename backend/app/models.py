@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from sqlalchemy import JSON, Column, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -96,6 +97,45 @@ class AuditLog(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class MissionTask(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("project_id", name="uq_missiontask_project_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(index=True)
+    mission_id: str = Field(index=True)
+    name: str
+    mission_type: str = ""
+    description: str = ""
+    priority: int = 1
+    required_assurance: float = 1.0
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    region_name: str = ""
+    center_lat: float | None = None
+    center_lon: float | None = None
+    area_radius_km: float = 0
+    mobility_range_km: float = 0
+    commander_intent: str = ""
+    status: str = "draft"
+
+
+class TaskPhase(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("project_id", "phase_id", name="uq_taskphase_project_phase_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(index=True)
+    phase_id: str = Field(index=True)
+    name: str
+    sequence: int = 0
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    status: str = "draft"
+    area_center_lat: float | None = None
+    area_center_lon: float | None = None
+    area_radius_km: float = 0
+    notes: str = ""
+
+
 class TaskUnit(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     project_id: int = Field(index=True)
@@ -157,6 +197,29 @@ class SpectrumRule(SQLModel, table=True):
     source: str = ""
     severity: str = "中"
     raw_json: str
+
+
+class TaskLink(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("project_id", "link_id", name="uq_tasklink_project_link_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(index=True)
+    link_id: str = Field(index=True)
+    name: str
+    link_type: str = "communication"
+    source_task_unit_id: str | None = Field(default=None, index=True)
+    target_task_unit_id: str | None = Field(default=None, index=True)
+    source_equipment_group_id: str | None = Field(default=None, index=True)
+    target_equipment_group_id: str | None = Field(default=None, index=True)
+    direction: str = "bidirectional"
+    priority: int = 1
+    required_availability: float = 1.0
+    bandwidth_khz: float = 25
+    required_channels: int = 1
+    primary_band_group: str = ""
+    backup_band_group: str = ""
+    active_phase_ids: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    notes: str = ""
 
 
 class EquipmentAssignment(SQLModel, table=True):

@@ -35,6 +35,7 @@ import {
   ConstraintWeights,
   DiagnosticItem,
   EquipmentLibraryItem,
+  MissionTaskRecord,
   ParametricTaskDemoPayload,
   PlanResult,
   Project,
@@ -91,6 +92,7 @@ import {
   url,
   validateTaskProject,
 } from './api';
+import TaskWorkbench from './TaskWorkbench';
 type Notice = {
   type: 'info' | 'error' | 'success';
   text: string;
@@ -162,7 +164,9 @@ export default function TaskPlanningApp() {
   const [projectName, setProjectName] = useState('战场联合任务用频筹划');
   const [project, setProject] = useState<Project | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [taskDataSummary, setTaskDataSummary] = useState({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0 });
+  const [taskDataSummary, setTaskDataSummary] = useState({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0, phases: 0, links: 0 });
+  const [taskMission, setTaskMission] = useState<MissionTaskRecord | null>(null);
+  const [taskDataRevision, setTaskDataRevision] = useState(0);
   const [activeModule, setActiveModule] = useState<DashboardModuleKey>('overview');
   const [objectives, setObjectives] = useState<TaskObjective[]>(defaultObjectives);
   const [objective, setObjective] = useState('task_assurance');
@@ -324,10 +328,13 @@ export default function TaskPlanningApp() {
   }
 
   function applyTaskDataSummary(data: TaskProjectData) {
+    setTaskMission(data.mission ?? null);
     setTaskDataSummary({
       taskUnits: data.task_units.length,
       equipmentGroups: data.equipment_groups.length,
       spectrumRules: data.spectrum_rules.length,
+      phases: data.phases?.length ?? 0,
+      links: data.links?.length ?? 0,
     });
   }
 
@@ -335,7 +342,8 @@ export default function TaskPlanningApp() {
     try {
       applyTaskDataSummary(await getTaskProjectData(projectId));
     } catch {
-      setTaskDataSummary({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0 });
+      setTaskMission(null);
+      setTaskDataSummary({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0, phases: 0, links: 0 });
     }
   }
 
@@ -397,7 +405,8 @@ export default function TaskPlanningApp() {
       setProjects((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       clearPlanningState();
       setSpectrumRules([]);
-      setTaskDataSummary({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0 });
+      setTaskMission(null);
+      setTaskDataSummary({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0, phases: 0, links: 0 });
       window.localStorage.setItem('spectrum-planning-project-id', String(created.id));
     }
   }
@@ -412,6 +421,7 @@ export default function TaskPlanningApp() {
       clearPlanningState();
       await refreshSpectrumRules(project.id);
       await refreshTaskDataSummary(project.id);
+      setTaskDataRevision((current) => current + 1);
     }
   }
 
@@ -425,6 +435,7 @@ export default function TaskPlanningApp() {
       clearPlanningState();
       await refreshSpectrumRules(project.id);
       await refreshTaskDataSummary(project.id);
+      setTaskDataRevision((current) => current + 1);
     }
   }
 
@@ -443,6 +454,7 @@ export default function TaskPlanningApp() {
       clearPlanningState();
       if (kind === 'spectrum-rules') await refreshSpectrumRules(project.id);
       await refreshTaskDataSummary(project.id);
+      setTaskDataRevision((current) => current + 1);
     }
   }
 
@@ -918,7 +930,15 @@ export default function TaskPlanningApp() {
         />
         <div className="dashboard-main-stack">
           <ReferenceTopBar project={project} plan={plan} reportUrl={reportUrl} title={activeModuleTitle} />
-          <ReferenceProjectBar project={project} plan={plan} validation={validation} onCompare={handleCompare} busy={busy} />
+          <ReferenceProjectBar
+            project={project}
+            mission={taskMission}
+            taskUnitCount={taskDataSummary.taskUnits}
+            plan={plan}
+            validation={validation}
+            onCompare={handleCompare}
+            busy={busy}
+          />
 
           {notice && <div className={`notice ${notice.type}`}>{notice.text}</div>}
 
@@ -943,6 +963,12 @@ export default function TaskPlanningApp() {
 
             {activeModule === 'tasks' && (
               <section id="dashboard-data" className="workflow task-workflow dashboard-section">
+        <TaskWorkbench
+          projectId={project?.id ?? null}
+          busy={busy}
+          revision={taskDataRevision}
+          onDataChange={applyTaskDataSummary}
+        />
         <div className="panel setup">
           <div className="panel-title">
             <WandSparkles size={18} />
@@ -989,6 +1015,8 @@ export default function TaskPlanningApp() {
               <div className="project-data-summary" aria-label="当前项目数据概况">
                 <span>任务单元 <strong>{taskDataSummary.taskUnits}</strong></span>
                 <span>装备组 <strong>{taskDataSummary.equipmentGroups}</strong></span>
+                <span>任务阶段 <strong>{taskDataSummary.phases}</strong></span>
+                <span>任务链路 <strong>{taskDataSummary.links}</strong></span>
                 <span>频谱规则 <strong>{taskDataSummary.spectrumRules}</strong></span>
                 <span>创建时间 <strong>{formatProjectDate(project.created_at)}</strong></span>
               </div>
@@ -1422,20 +1450,35 @@ function ReferenceTopBar({ project, plan, reportUrl, title }: { project: Project
 
 function ReferenceProjectBar({
   project,
+  mission,
+  taskUnitCount,
   plan,
   validation,
   busy,
   onCompare,
 }: {
   project: Project | null;
+  mission: MissionTaskRecord | null;
+  taskUnitCount: number;
   plan: PlanResult | null;
   validation: TaskValidationResult | null;
   busy: boolean;
   onCompare: () => void;
 }) {
-  const validatedUnits = numberValue(validation?.summary.task_unit_count);
-  const statusText = plan?.status === 'success' ? '规划进行中' : validation ? '数据已校验' : project ? '待接入数据' : '未创建项目';
-  const tone = plan?.status === 'success' ? 'running' : validation ? 'ready' : 'pending';
+  const validatedUnits = numberValue(validation?.summary.task_unit_count) ?? (taskUnitCount || null);
+  const missionRange = mission?.starts_at || mission?.ends_at
+    ? `${formatMissionTime(mission.starts_at)} ～ ${formatMissionTime(mission.ends_at)}`
+    : '未设置';
+  const statusText = plan?.status === 'success'
+    ? '规划进行中'
+    : validation
+      ? '数据已校验'
+      : mission || taskUnitCount
+        ? '任务筹划中'
+        : project
+          ? '待接入数据'
+          : '未创建项目';
+  const tone = plan?.status === 'success' ? 'running' : validation || mission || taskUnitCount ? 'ready' : 'pending';
   return (
     <section className="reference-project-bar" aria-label="项目状态摘要">
       <div className="project-meta">
@@ -1445,7 +1488,7 @@ function ReferenceProjectBar({
       <span className={`project-pill ${tone}`}>{statusText}</span>
       <div className="project-meta">
         <span>时间范围：</span>
-        <strong>2025-05-20 08:00 ～ 2025-05-24 18:00</strong>
+        <strong>{missionRange}</strong>
       </div>
       <div className="project-meta compact">
         <span>任务单元：</span>
@@ -5247,6 +5290,20 @@ function formatProjectDate(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return '--';
   return parsed.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatMissionTime(value: string | null): string {
+  if (!value) return '未设置';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value.replace('T', ' ').slice(0, 16);
+  return parsed.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 function numberMetric(value: unknown): number {
