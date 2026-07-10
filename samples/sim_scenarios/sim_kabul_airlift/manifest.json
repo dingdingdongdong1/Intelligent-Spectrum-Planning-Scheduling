@@ -1,0 +1,45 @@
+{
+  "scenario_id": "SIM-KABUL-AIRLIFT-01",
+  "name": "机场高密度撤离通信仿真",
+  "reference_case_id": "CASE-OAR-2021",
+  "case_type": "noncombatant_evacuation_reference",
+  "source_ids": [
+    "SRC-28",
+    "SRC-29"
+  ],
+  "factual_basis": [
+    "昼夜连续空运",
+    "机场空中交通管制",
+    "多国与商业航空协同",
+    "节点和航班快速增长"
+  ],
+  "simulation_assumptions": [
+    "不使用历史航班表",
+    "机场位置和通信参数均为合成值",
+    "AIR-SIM仅用于软件测试"
+  ],
+  "dynamic_events": [
+    "航班批次激增",
+    "医疗后送任务插入",
+    "跑道通信节点失效",
+    "伙伴网关临时接入"
+  ],
+  "recommended_objectives": [
+    "task_assurance",
+    "communication_continuity",
+    "minimize_switching"
+  ],
+  "scenario_key": "sim_kabul_airlift",
+  "data_boundary": "Public sources define mission structure only; all operational inputs are synthetic.",
+  "files": {
+    "task_units": "task_units.xlsx",
+    "equipment_groups": "equipment_groups.xlsx",
+    "spectrum_rules": "spectrum_rules.xlsx"
+  },
+  "counts": {
+    "task_units": 6,
+    "equipment_groups": 9,
+    "spectrum_rules": 8,
+    "equipment_samples": 115
+  }
+}

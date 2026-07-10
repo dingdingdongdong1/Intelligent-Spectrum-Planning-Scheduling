@@ -1,0 +1,46 @@
+{
+  "scenario_id": "SIM-RED-SEA-DEFENSE-01",
+  "name": "海上多目标防空协同仿真",
+  "reference_case_id": "CASE-OPG-2023-24",
+  "case_type": "combat_operation_reference",
+  "source_ids": [
+    "SRC-30",
+    "SRC-31",
+    "SRC-32"
+  ],
+  "factual_basis": [
+    "狭窄航道持续护航",
+    "多目标空中威胁",
+    "多国协同",
+    "商船双向通信"
+  ],
+  "simulation_assumptions": [
+    "舰船和航道坐标为合成网格",
+    "不对应任何参战舰艇配置",
+    "雷达、数据链和卫星频段均为SIM资源"
+  ],
+  "dynamic_events": [
+    "多目标告警",
+    "联盟节点加入",
+    "商船流量上升",
+    "卫星回传窗口受限"
+  ],
+  "recommended_objectives": [
+    "radar_priority",
+    "communication_continuity",
+    "priority_equipment"
+  ],
+  "scenario_key": "sim_red_sea_defense",
+  "data_boundary": "Public sources define mission structure only; all operational inputs are synthetic.",
+  "files": {
+    "task_units": "task_units.xlsx",
+    "equipment_groups": "equipment_groups.xlsx",
+    "spectrum_rules": "spectrum_rules.xlsx"
+  },
+  "counts": {
+    "task_units": 6,
+    "equipment_groups": 10,
+    "spectrum_rules": 8,
+    "equipment_samples": 92
+  }
+}

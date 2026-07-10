@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from io import BytesIO
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
@@ -321,6 +322,8 @@ def generate_parametric_task_demo(
 async def upload_task_units(project_id: int, file: UploadFile = File(...), session: Session = Depends(get_session)) -> dict:
     _require_project(session, project_id)
     parsed = parse_task_unit_excel(await file.read())
+    _require_complete_upload(parsed, "任务单元", ("task_unit_id", "name", "unit_type"))
+    _require_valid_task_unit_upload(parsed.records)
     replace_task_units(session, project_id, parsed.records)
     return {
         "count": len(parsed.records),
@@ -333,6 +336,12 @@ async def upload_task_units(project_id: int, file: UploadFile = File(...), sessi
 async def upload_equipment_groups(project_id: int, file: UploadFile = File(...), session: Session = Depends(get_session)) -> dict:
     _require_project(session, project_id)
     parsed = parse_equipment_group_excel(await file.read())
+    _require_complete_upload(
+        parsed,
+        "装备组",
+        ("equipment_group_id", "task_unit_id", "equipment_type", "bandwidth_khz"),
+    )
+    _require_valid_equipment_group_upload(parsed.records, db_task_units_to_dicts(session, project_id))
     replace_equipment_groups(session, project_id, parsed.records)
     return {
         "count": len(parsed.records),
@@ -345,6 +354,12 @@ async def upload_equipment_groups(project_id: int, file: UploadFile = File(...),
 async def upload_spectrum_rules(project_id: int, file: UploadFile = File(...), session: Session = Depends(get_session)) -> dict:
     _require_project(session, project_id)
     parsed = parse_spectrum_rule_excel(await file.read())
+    _require_complete_upload(
+        parsed,
+        "频谱规则",
+        ("rule_id", "rule_type", "band_group", "start_mhz", "end_mhz"),
+    )
+    _require_valid_spectrum_rule_upload(parsed.records)
     replace_spectrum_rules(session, project_id, parsed.records)
     return {
         "count": len(parsed.records),
@@ -791,6 +806,155 @@ def _require_project(session: Session, project_id: int) -> Project:
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
     return project
+
+
+def _require_complete_upload(parsed: object, label: str, required_columns: tuple[str, ...]) -> None:
+    missing_columns = list(getattr(parsed, "missing_columns", []) or [])
+    records = list(getattr(parsed, "records", []) or [])
+    missing_required = [column for column in required_columns if column in missing_columns]
+    if missing_required:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": f"{label}文件缺少核心列，未覆盖现有项目数据。",
+                "missing_columns": missing_required,
+            },
+        )
+    if not records:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": f"{label}文件没有可导入记录，未覆盖现有项目数据。", "missing_columns": []},
+        )
+
+
+def _reject_invalid_upload(label: str, errors: list[str]) -> None:
+    if errors:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": f"{label}文件内容无效，未覆盖现有项目数据。", "errors": errors[:20]},
+        )
+
+
+def _invalid_numeric_fields(record: dict, fields: tuple[str, ...]) -> list[str]:
+    try:
+        raw = json.loads(str(record.get("raw_json") or "{}"))
+    except (TypeError, ValueError):
+        return list(fields)
+    invalid: list[str] = []
+    for field in fields:
+        value = raw.get(field)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            invalid.append(field)
+            continue
+        if not math.isfinite(number):
+            invalid.append(field)
+    return invalid
+
+
+def _require_valid_task_unit_upload(records: list[dict]) -> None:
+    errors: list[str] = []
+    ids: set[str] = set()
+    for index, record in enumerate(records, start=2):
+        task_id = str(record.get("task_unit_id") or "").strip()
+        if not task_id or not str(record.get("name") or "").strip() or not str(record.get("unit_type") or "").strip():
+            errors.append(f"第{index}行任务编号、名称和类型不能为空")
+        if task_id in ids:
+            errors.append(f"第{index}行任务编号重复：{task_id}")
+        ids.add(task_id)
+        ratio = float(record.get("min_satisfaction_ratio") or 0)
+        if ratio <= 0 or ratio > 1:
+            errors.append(f"第{index}行最低保障率必须大于0且不超过1")
+        invalid_fields = _invalid_numeric_fields(
+            record,
+            ("area_center_lat", "area_center_lon", "area_radius_km", "priority", "min_satisfaction_ratio"),
+        )
+        if invalid_fields:
+            errors.append(f"第{index}行数字格式无效：{','.join(invalid_fields)}")
+    _reject_invalid_upload("任务单元", errors)
+
+
+def _require_valid_equipment_group_upload(records: list[dict], task_units: list[dict]) -> None:
+    errors: list[str] = []
+    ids: set[str] = set()
+    task_ids = {str(item.get("task_unit_id") or "") for item in task_units}
+    for index, record in enumerate(records, start=2):
+        group_id = str(record.get("equipment_group_id") or "").strip()
+        task_id = str(record.get("task_unit_id") or "").strip()
+        if not group_id or not task_id or not str(record.get("equipment_type") or "").strip():
+            errors.append(f"第{index}行装备组编号、任务编号和装备类型不能为空")
+        if group_id in ids:
+            errors.append(f"第{index}行装备组编号重复：{group_id}")
+        ids.add(group_id)
+        if task_id not in task_ids:
+            errors.append(f"第{index}行关联了不存在的任务单元：{task_id}")
+        if float(record.get("bandwidth_khz") or 0) <= 0:
+            errors.append(f"第{index}行带宽必须大于0")
+        if int(record.get("count") or 0) <= 0 or int(record.get("required_channels") or 0) <= 0:
+            errors.append(f"第{index}行数量和所需信道数必须大于0")
+        if float(record.get("tx_power_w") or 0) < 0:
+            errors.append(f"第{index}行发射功率不能为负数")
+        invalid_fields = _invalid_numeric_fields(
+            record,
+            (
+                "count",
+                "bandwidth_khz",
+                "tx_power_w",
+                "antenna_gain_dbi",
+                "antenna_height_m",
+                "receiver_sensitivity_dbm",
+                "required_channels",
+                "priority",
+                "protection_distance_km",
+                "min_spacing_khz",
+                "guard_band_khz",
+            ),
+        )
+        if invalid_fields:
+            errors.append(f"第{index}行数字格式无效：{','.join(invalid_fields)}")
+    _reject_invalid_upload("装备组", errors)
+
+
+def _require_valid_spectrum_rule_upload(records: list[dict]) -> None:
+    errors: list[str] = []
+    ids: set[str] = set()
+    for index, record in enumerate(records, start=2):
+        rule_id = str(record.get("rule_id") or "").strip()
+        rule_type = str(record.get("rule_type") or "").strip()
+        if not rule_id or not str(record.get("band_group") or "").strip():
+            errors.append(f"第{index}行规则编号和频段组不能为空")
+        if rule_id in ids:
+            errors.append(f"第{index}行规则编号重复：{rule_id}")
+        ids.add(rule_id)
+        if rule_type not in {"可用", "保护", "禁用"}:
+            errors.append(f"第{index}行规则类型无效：{rule_type or '-'}")
+        if float(record.get("end_mhz") or 0) <= float(record.get("start_mhz") or 0):
+            errors.append(f"第{index}行终止频率必须大于起始频率")
+        if float(record.get("channel_step_khz") or 0) <= 0:
+            errors.append(f"第{index}行信道步进必须大于0")
+        if rule_type == "可用" and (
+            float(record.get("max_bandwidth_khz") or 0) <= 0 or float(record.get("max_power_w") or 0) <= 0
+        ):
+            errors.append(f"第{index}行可用规则的最大带宽和最大功率必须大于0")
+        invalid_fields = _invalid_numeric_fields(
+            record,
+            (
+                "start_mhz",
+                "end_mhz",
+                "channel_step_khz",
+                "max_bandwidth_khz",
+                "max_power_w",
+                "guard_band_khz",
+            ),
+        )
+        if invalid_fields:
+            errors.append(f"第{index}行数字格式无效：{','.join(invalid_fields)}")
+    if not any(str(record.get("rule_type") or "") == "可用" for record in records):
+        errors.append("至少需要一条可用频段规则")
+    _reject_invalid_upload("频谱规则", errors)
 
 
 def _resolve_run(session: Session, project_id: int, run_id: int | None) -> PlanningRun:

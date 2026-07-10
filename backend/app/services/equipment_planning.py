@@ -24,6 +24,7 @@ from ..models import (
     TaskUnit,
 )
 from .geo import haversine_km
+from .sim_scenarios import SIM_SCENARIO_KEYS, sim_scenario_records
 from .task_catalog import (
     BATCH_PERFORMANCE_SCALES,
     EQUIPMENT_LIBRARY,
@@ -2439,6 +2440,8 @@ def build_task_export_xlsx(assignments: list[dict], risks: list[dict], summary: 
 
 
 def demo_scenario_records(scenario: str = "baseline") -> tuple[list[dict], list[dict], list[dict]]:
+    if scenario in SIM_SCENARIO_KEYS:
+        return sim_scenario_records(scenario)
     if scenario == "large_joint_exercise":
         return _scaled_demo_records("LG", 18, 1.85)
     if scenario == "stress_performance":

@@ -37,7 +37,7 @@ CATALOG_NAMES = (
     "PARAMETRIC_SAMPLE_DEFAULTS",
 )
 
-CATALOG_SHA256 = "9c1f07c80fb10756c942ecf7cb444f2d6dcc3d6d27abecee9a2da0a2de5c5246"
+CATALOG_SHA256 = "1fb8dd4dd1225fa429566ea69c4ac28c13f89e9d3937a61efc5b83ba7a90d8ae"
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
@@ -64,7 +64,7 @@ def test_catalog_endpoints_keep_their_public_contract() -> None:
 
     assert len(objectives.json()) == 10
     assert len(equipment.json()) == 17
-    assert len(scenarios.json()) == 8
+    assert len(scenarios.json()) == 12
     assert objectives.json() == task_catalog.TASK_OBJECTIVES
     assert equipment.json() == task_catalog.EQUIPMENT_LIBRARY
     assert scenarios.json() == task_catalog.TASK_SCENARIOS

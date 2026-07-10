@@ -1,0 +1,44 @@
+{
+  "scenario_id": "SIM-MOSUL-URBAN-01",
+  "name": "摩苏尔城市频谱拥塞仿真",
+  "reference_case_id": "CASE-MOSUL-2016-17",
+  "case_type": "combat_operation_reference",
+  "source_ids": [
+    "SRC-25"
+  ],
+  "factual_basis": [
+    "城市频谱拥塞",
+    "UAS/C-UAS并行运用",
+    "友军系统兼容风险",
+    "能力快速机动接入"
+  ],
+  "simulation_assumptions": [
+    "全部坐标为合成网格",
+    "全部SIM频段与功率为算法测试值",
+    "不复原历史行动编组和电子战配置"
+  ],
+  "dynamic_events": [
+    "新增低空目标",
+    "C-UAS保护窗口扩大",
+    "城区中继节点失联",
+    "火力任务优先级上调"
+  ],
+  "recommended_objectives": [
+    "minimize_interference",
+    "uav_link_priority",
+    "communication_continuity"
+  ],
+  "scenario_key": "sim_mosul_urban",
+  "data_boundary": "Public sources define mission structure only; all operational inputs are synthetic.",
+  "files": {
+    "task_units": "task_units.xlsx",
+    "equipment_groups": "equipment_groups.xlsx",
+    "spectrum_rules": "spectrum_rules.xlsx"
+  },
+  "counts": {
+    "task_units": 6,
+    "equipment_groups": 10,
+    "spectrum_rules": 8,
+    "equipment_samples": 79
+  }
+}

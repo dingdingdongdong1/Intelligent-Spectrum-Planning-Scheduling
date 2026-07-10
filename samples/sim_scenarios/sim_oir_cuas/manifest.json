@@ -1,0 +1,44 @@
+{
+  "scenario_id": "SIM-OIR-CUAS-01",
+  "name": "基地多传感器反无人机仿真",
+  "reference_case_id": "CASE-OIR-CUAS-2023-24",
+  "case_type": "combat_operation_reference",
+  "source_ids": [
+    "SRC-44"
+  ],
+  "factual_basis": [
+    "Q-50/Q-53/Q-64多传感器",
+    "FAAD C2融合",
+    "近实时联合态势共享",
+    "专业人员和节点容量约束"
+  ],
+  "simulation_assumptions": [
+    "雷达名称只表示任务角色",
+    "探测和链路参数为合成值",
+    "不包含真实目标轨迹和交战规则"
+  ],
+  "dynamic_events": [
+    "传感器离线",
+    "多目标突发",
+    "融合节点负荷上升",
+    "机动防护单元加入"
+  ],
+  "recommended_objectives": [
+    "radar_priority",
+    "task_assurance",
+    "minimize_interference"
+  ],
+  "scenario_key": "sim_oir_cuas",
+  "data_boundary": "Public sources define mission structure only; all operational inputs are synthetic.",
+  "files": {
+    "task_units": "task_units.xlsx",
+    "equipment_groups": "equipment_groups.xlsx",
+    "spectrum_rules": "spectrum_rules.xlsx"
+  },
+  "counts": {
+    "task_units": 6,
+    "equipment_groups": 10,
+    "spectrum_rules": 8,
+    "equipment_samples": 50
+  }
+}

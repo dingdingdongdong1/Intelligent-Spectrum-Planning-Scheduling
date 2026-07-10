@@ -259,6 +259,26 @@ TASK_SCENARIOS = [
         "name": "压力效能测试",
         "description": "36 个任务单元、150 余个装备组、3500 余台套仿真装备，用于观察求解耗时和瓶颈。",
     },
+    {
+        "key": "sim_mosul_urban",
+        "name": "SIM 摩苏尔城市频谱",
+        "description": "由公开战例提炼的城市拥塞、UAS/C-UAS并行和友军兼容风险仿真；全部参数为合成值。",
+    },
+    {
+        "key": "sim_kabul_airlift",
+        "name": "SIM 机场撤离通信",
+        "description": "由公开撤离行动提炼的机场空管、高密度调度和伙伴接入仿真；不使用历史航班与频道。",
+    },
+    {
+        "key": "sim_oir_cuas",
+        "name": "SIM 基地反无人机",
+        "description": "由OIR公开复盘提炼的多传感器、融合节点和联合态势网仿真；不包含真实目标轨迹。",
+    },
+    {
+        "key": "sim_red_sea_defense",
+        "name": "SIM 海上多目标防空",
+        "description": "由红海公开行动提炼的舰载探测、多目标防御、联盟和商船通信仿真；不对应具体舰艇配置。",
+    },
 ]
 
 SAMPLE_GENERATOR_PRESETS = [
