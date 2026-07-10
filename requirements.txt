@@ -1,0 +1,10 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pandas==2.2.3
+openpyxl==3.1.5
+sqlmodel==0.0.22
+ortools==9.11.4210
+httpx==0.28.1
+pydantic-settings==2.7.1
+pytest==8.3.4
