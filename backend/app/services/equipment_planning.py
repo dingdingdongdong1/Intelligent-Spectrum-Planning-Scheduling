@@ -8,6 +8,7 @@ import time
 from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 from html import escape
 from itertools import combinations
 
@@ -20,6 +21,8 @@ from ..models import (
     EquipmentGroup,
     PlanningRun,
     Project,
+    MissionTask,
+    SpectrumResource,
     SpectrumRule,
     TaskRiskItem,
     TaskUnit,
@@ -62,6 +65,100 @@ def db_equipment_groups_to_dicts(session: Session, project_id: int) -> list[dict
 def db_spectrum_rules_to_dicts(session: Session, project_id: int) -> list[dict]:
     rows = session.exec(select(SpectrumRule).where(SpectrumRule.project_id == project_id).order_by(SpectrumRule.id)).all()
     return [row.model_dump() for row in rows]
+
+
+def planning_spectrum_rules(session: Session, project_id: int) -> list[dict]:
+    base_rules = db_spectrum_rules_to_dicts(session, project_id)
+    resources = session.exec(
+        select(SpectrumResource).where(SpectrumResource.project_id == project_id).order_by(SpectrumResource.id)
+    ).all()
+    if not resources:
+        return base_rules
+
+    mission = session.exec(select(MissionTask).where(MissionTask.project_id == project_id)).first()
+    planning_time = mission.starts_at if mission and mission.starts_at else datetime.utcnow()
+    planning_region = str(mission.region_name or "").strip() if mission else ""
+    active_resources = [
+        item.model_dump()
+        for item in resources
+        if item.status == "启用"
+        and (item.starts_at is None or item.starts_at <= planning_time)
+        and (item.ends_at is None or planning_time < item.ends_at)
+        and (not planning_region or item.region in {"", "全域", planning_region})
+    ]
+    if not active_resources:
+        return base_rules
+
+    available_resources = [item for item in active_resources if item.get("resource_type") == "可用频段"]
+    matched_available_bands: set[str] = set()
+    derived_available: list[dict] = []
+    for resource in available_resources:
+        matches = [
+            rule
+            for rule in base_rules
+            if rule.get("rule_type") == "可用"
+            and float(rule.get("start_mhz") or 0) < float(resource.get("end_mhz") or 0)
+            and float(resource.get("start_mhz") or 0) < float(rule.get("end_mhz") or 0)
+        ]
+        if not matches:
+            derived_available.append(_resource_to_spectrum_rule(resource, str(resource.get("resource_id") or "RESOURCE"), "可用"))
+            continue
+        for rule in matches:
+            band = str(rule.get("band_group") or resource.get("resource_id") or "RESOURCE")
+            matched_available_bands.add(band)
+            derived = _resource_to_spectrum_rule(resource, band, "可用")
+            derived["start_mhz"] = max(float(resource["start_mhz"]), float(rule["start_mhz"]))
+            derived["end_mhz"] = min(float(resource["end_mhz"]), float(rule["end_mhz"]))
+            derived["compatible_unit_types"] = rule.get("compatible_unit_types") or ""
+            derived["compatible_equipment_types"] = resource.get("compatible_equipment_types") or rule.get("compatible_equipment_types") or ""
+            derived_available.append(derived)
+
+    combined = [
+        rule
+        for rule in base_rules
+        if not (rule.get("rule_type") == "可用" and rule.get("band_group") in matched_available_bands)
+    ]
+    combined.extend(derived_available)
+
+    type_mapping = {"固定占用": "禁用", "临时占用": "禁用", "保护频段": "保护", "禁用频段": "禁用"}
+    available_base_rules = [rule for rule in base_rules if rule.get("rule_type") == "可用"]
+    for resource in active_resources:
+        rule_type = type_mapping.get(str(resource.get("resource_type") or ""))
+        if not rule_type:
+            continue
+        matches = [
+            rule
+            for rule in available_base_rules
+            if float(rule.get("start_mhz") or 0) < float(resource.get("end_mhz") or 0)
+            and float(resource.get("start_mhz") or 0) < float(rule.get("end_mhz") or 0)
+        ]
+        bands = sorted({str(rule.get("band_group")) for rule in matches if rule.get("band_group")}) or [str(resource.get("resource_id") or "RESOURCE")]
+        for band in bands:
+            combined.append(_resource_to_spectrum_rule(resource, band, rule_type))
+    return combined
+
+
+def _resource_to_spectrum_rule(resource: dict, band_group: str, rule_type: str) -> dict:
+    return {
+        "id": None,
+        "project_id": resource.get("project_id"),
+        "rule_id": f"RESOURCE-{resource.get('resource_id')}-{band_group}-{rule_type}",
+        "rule_type": rule_type,
+        "band_group": band_group,
+        "spectrum_relation": "可复用" if rule_type == "可用" else rule_type,
+        "start_mhz": float(resource.get("start_mhz") or 0),
+        "end_mhz": float(resource.get("end_mhz") or 0),
+        "channel_step_khz": float(resource.get("channel_step_khz") or 25),
+        "max_bandwidth_khz": float(resource.get("max_bandwidth_khz") or 0),
+        "max_power_w": float(resource.get("max_power_w") or 0),
+        "guard_band_khz": float(resource.get("guard_band_khz") or 0),
+        "compatible_unit_types": "",
+        "compatible_equipment_types": resource.get("compatible_equipment_types") or "",
+        "reason": f"频谱资源 {resource.get('resource_id')}：{resource.get('name')}",
+        "source": resource.get("source") or "SPECTRUM_RESOURCE",
+        "severity": "高" if rule_type == "禁用" else "中" if rule_type == "保护" else "低",
+        "raw_json": "{}",
+    }
 
 
 def _replace_task_units_without_commit(session: Session, project_id: int, records: list[dict]) -> None:
@@ -289,7 +386,7 @@ def preview_task_strategy_trials(session: Session, project_id: int, payload: dic
     changes = _parse_replan_changes(session, project_id, payload)
     task_units = db_task_units_to_dicts(session, project_id)
     equipment_groups = db_equipment_groups_to_dicts(session, project_id)
-    spectrum_rules = db_spectrum_rules_to_dicts(session, project_id)
+    spectrum_rules = planning_spectrum_rules(session, project_id)
     base_run_id, base_summary = _replan_base_summary(session, project_id, changes.get("base_run_id"))
     locked_assignments = _locked_assignments_for_run(session, project_id, changes["locked_equipment_group_ids"], base_run_id)
     base_assignments = task_assignments_for_run(session, project_id, base_run_id) if base_run_id else []
@@ -505,7 +602,8 @@ def run_task_planning(session: Session, project_id: int, objective: str = "task_
     constraints = constraints or {}
     task_units = db_task_units_to_dicts(session, project_id)
     equipment_groups = db_equipment_groups_to_dicts(session, project_id)
-    spectrum_rules = db_spectrum_rules_to_dicts(session, project_id)
+    spectrum_rules = planning_spectrum_rules(session, project_id)
+    resource_rule_count = sum(1 for item in spectrum_rules if str(item.get("rule_id") or "").startswith("RESOURCE-"))
     task_units, equipment_groups = _scope_task_records(task_units, equipment_groups, constraints)
     run = PlanningRun(project_id=project_id, objective=objective, status="running")
     session.add(run)
@@ -523,6 +621,7 @@ def run_task_planning(session: Session, project_id: int, objective: str = "task_
         return run
 
     result = solve_task_assignment(task_units, equipment_groups, spectrum_rules, objective, constraints=constraints)
+    result["summary"]["spectrum_resource_rule_count"] = resource_rule_count
     batch_context = _normalized_batch_context(constraints.get("batch_context"), len(task_units), len(equipment_groups))
     if batch_context:
         result["summary"]["batch_context"] = batch_context
@@ -556,7 +655,7 @@ def execute_capacity_batch_planning(session: Session, project_id: int, payload: 
     base_summary = _json_dict(base_run.summary_json or "{}")
     task_units = db_task_units_to_dicts(session, project_id)
     equipment_groups = db_equipment_groups_to_dicts(session, project_id)
-    spectrum_rules = db_spectrum_rules_to_dicts(session, project_id)
+    spectrum_rules = planning_spectrum_rules(session, project_id)
     base_assignments = task_assignments_for_run(session, project_id, base_run.id)
     base_risks = task_risks_for_run(session, project_id, base_run.id)
     visualization = build_task_visualization_data(
@@ -689,7 +788,7 @@ def execute_capacity_batch_risk_closure(session: Session, project_id: int, paylo
     if not batch_plan:
         task_units = db_task_units_to_dicts(session, project_id)
         equipment_groups = db_equipment_groups_to_dicts(session, project_id)
-        spectrum_rules = db_spectrum_rules_to_dicts(session, project_id)
+        spectrum_rules = planning_spectrum_rules(session, project_id)
         visualization = build_task_visualization_data(
             task_units=task_units,
             equipment_groups=equipment_groups,
@@ -4235,7 +4334,7 @@ def task_agent_capability_assessment(session: Session, project_id: int, run_id: 
     visualization = build_task_visualization_data(
         task_units=db_task_units_to_dicts(session, project_id),
         equipment_groups=db_equipment_groups_to_dicts(session, project_id),
-        spectrum_rules=db_spectrum_rules_to_dicts(session, project_id),
+        spectrum_rules=planning_spectrum_rules(session, project_id),
         assignments=assignments,
         risk_items=risk_items,
         summary=summary,
@@ -5456,7 +5555,7 @@ def _parse_replan_changes(session: Session, project_id: int, payload: dict) -> d
     message = str(payload.get("message") or "")
     task_units = db_task_units_to_dicts(session, project_id)
     equipment_groups = db_equipment_groups_to_dicts(session, project_id)
-    spectrum_rules = db_spectrum_rules_to_dicts(session, project_id)
+    spectrum_rules = planning_spectrum_rules(session, project_id)
     base_context = _replan_base_context(session, project_id, payload.get("base_run_id"))
     text_objective = _objective_from_message(message)
     requested_objective = payload.get("objective") or text_objective or base_context.get("objective") or "task_assurance"
@@ -5582,7 +5681,7 @@ def _apply_replan_changes(session: Session, project_id: int, changes: dict) -> d
         "priority_update_count": 0,
         "satisfaction_update_count": 0,
     }
-    rules = db_spectrum_rules_to_dicts(session, project_id)
+    rules = planning_spectrum_rules(session, project_id)
     for idx, item in enumerate(changes["available_ranges"]):
         start = float(item.get("start_mhz") or 0)
         end = float(item.get("end_mhz") or 0)

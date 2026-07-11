@@ -286,6 +286,34 @@
   .interference-network { min-height: 210px; }
 }
 
+.planning-result-panel { grid-column: 1 / -1; overflow: hidden; border: 1px solid #cbd6e5; background: #fff; border-radius: 6px; }
+.planning-result-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 18px 20px; border-bottom: 1px solid #dfe6ef; }
+.planning-result-panel > header span { color: #1769d2; font-size: 12px; font-weight: 700; }
+.planning-result-panel > header h2 { margin: 3px 0 5px; font-size: 19px; }
+.planning-result-panel > header p { margin: 0; color: #5b6a7e; font-size: 12px; }
+.planning-result-panel > header svg { color: #1769d2; }
+.planning-result-metrics { display: grid; grid-template-columns: repeat(5, minmax(100px, 1fr)); border-bottom: 1px solid #dfe6ef; background: #f7f9fc; }
+.planning-result-metrics > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 13px 16px; border-right: 1px solid #dfe6ef; }
+.planning-result-metrics > div:last-child { border-right: 0; }
+.planning-result-metrics span { color: #637287; font-size: 11px; }
+.planning-result-metrics strong { font-size: 20px; }
+.planning-result-table-wrap { overflow: auto; max-height: 570px; }
+.planning-result-table { width: 100%; min-width: 1180px; border-collapse: collapse; }
+.planning-result-table th { position: sticky; top: 0; z-index: 1; padding: 11px 12px; background: #eef2f7; color: #40516a; text-align: left; font-size: 11px; }
+.planning-result-table td { padding: 12px; border-top: 1px solid #e2e7ef; vertical-align: top; font-size: 12px; }
+.planning-result-table td strong, .planning-result-table td span { display: block; }
+.planning-result-table td span { max-width: 280px; margin-top: 3px; overflow-wrap: anywhere; color: #657388; line-height: 1.45; }
+.planning-status { display: inline-flex !important; align-items: center; gap: 4px; width: max-content; margin: 0 !important; padding: 3px 7px; border: 1px solid #b7c4d5; background: #f4f7fa; border-radius: 4px; }
+.planning-status.full { border-color: #8fc8ad; color: #176b4b !important; }
+.planning-status.partial { border-color: #e0b46e; color: #9a5b00 !important; }
+.planning-status.unmet { border-color: #de9696; color: #b32626 !important; }
+
+@media (max-width: 760px) {
+  .planning-result-panel > header { flex-direction: column; }
+  .planning-result-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .planning-result-metrics > div { padding: 11px; border-bottom: 1px solid #dfe6ef; }
+}
+
 * {
   box-sizing: border-box;
 }

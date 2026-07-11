@@ -95,6 +95,7 @@ import {
 import TaskWorkbench from './TaskWorkbench';
 import SpectrumResourcePanel from './SpectrumResourcePanel';
 import { InterferenceAnalysisPanel } from './InterferenceAnalysisPanel';
+import { PlanningResultPanel } from './PlanningResultPanel';
 type Notice = {
   type: 'info' | 'error' | 'success';
   text: string;
@@ -1210,6 +1211,7 @@ export default function TaskPlanningApp() {
 
             {activeModule === 'plan' && (
               <section id="dashboard-plan" className="content-grid task-content-grid dashboard-section">
+                <PlanningResultPanel data={visualization} />
                 <ValidationPanel data={validation} />
                 <TaskComparisonPanel data={comparison} projectId={project?.id ?? null} onSelect={selectPlan} />
               </section>

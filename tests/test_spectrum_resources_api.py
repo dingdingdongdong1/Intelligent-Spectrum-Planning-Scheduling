@@ -6,6 +6,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from backend.app.database import get_session
 from backend.app.main import app
+from backend.app.services.equipment_planning import _parse_resource_segments
 
 
 def _client() -> tuple[TestClient, object]:
@@ -114,6 +115,55 @@ def test_heatmap_combines_active_resource_types_and_time_windows() -> None:
         assert any(cell["resource_type"] == "临时占用" and cell["availability_pct"] == 30 for cell in data["cells"])
         assert any(cell["resource_type"] == "保护频段" and cell["availability_pct"] == 10 for cell in data["cells"])
         assert all("FUTURE" not in cell["active_resource_ids"] for cell in data["cells"])
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()
+
+
+def test_active_resource_constraints_participate_in_task_planning() -> None:
+    client, engine = _client()
+    try:
+        project_id = _project(client, "resource-planning")
+        generated = client.post(f"/api/projects/{project_id}/generate-task-demo", params={"scenario": "baseline"})
+        assert generated.status_code == 200, generated.text
+
+        protected = _resource("LIVE-PROTECT", "保护频段", 410.2, 410.6)
+        protected["region"] = "全域"
+        created = client.post(f"/api/projects/{project_id}/spectrum-resources", json=protected)
+        assert created.status_code == 200, created.text
+
+        future = _resource("FUTURE-FORBID", "禁用频段", 410.7, 410.9)
+        future.update({"region": "全域", "starts_at": "2099-01-01T00:00:00", "ends_at": "2099-01-02T00:00:00"})
+        assert client.post(f"/api/projects/{project_id}/spectrum-resources", json=future).status_code == 200
+
+        planned = client.post(
+            f"/api/projects/{project_id}/task-plan",
+            json={"objective": "minimize_interference", "constraint_weights": {}, "strategy_profile": "risk_first"},
+        )
+        assert planned.status_code == 200, planned.text
+        summary = planned.json()["summary"]
+        assert summary["spectrum_resource_rule_count"] >= 1
+
+        visualization = client.get(
+            f"/api/projects/{project_id}/task-visualization",
+            params={"run_id": planned.json()["run_id"]},
+        )
+        assert visualization.status_code == 200, visualization.text
+        timeline_rules = [
+            marker["id"]
+            for band in visualization.json()["spectrum_timeline"]
+            for marker in band["markers"]
+            if marker["kind"] in {"保护", "禁用"}
+        ]
+        assert any("LIVE-PROTECT" in rule_id for rule_id in timeline_rules)
+        assert all("FUTURE-FORBID" not in rule_id for rule_id in timeline_rules)
+        uhf_assignments = [item for item in visualization.json()["assignments"] if item.get("band_group") == "UHF-SIM-1"]
+        assert uhf_assignments
+        assert all(
+            not (segment.start < 410.6 and 410.2 < segment.end)
+            for assignment in uhf_assignments
+            for segment in _parse_resource_segments(assignment.get("assigned_resource") or "")
+        )
     finally:
         app.dependency_overrides.clear()
         engine.dispose()

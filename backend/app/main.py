@@ -57,6 +57,7 @@ from .services.equipment_planning import (
     latest_capacity_batch_closure_export_xlsx,
     latest_capacity_batch_export_xlsx,
     list_spectrum_rules,
+    planning_spectrum_rules,
     preview_task_replan,
     preview_task_strategy_trials,
     replan_task_project,
@@ -724,7 +725,7 @@ def validate_task_project(project_id: int, session: Session = Depends(get_sessio
     result = validate_task_inputs(
         db_task_units_to_dicts(session, project_id),
         db_equipment_groups_to_dicts(session, project_id),
-        db_spectrum_rules_to_dicts(session, project_id),
+        planning_spectrum_rules(session, project_id),
     )
     session.add(AuditLog(project_id=project_id, action="validate_task", detail=json.dumps(result["summary"], ensure_ascii=False)))
     session.commit()
@@ -737,7 +738,7 @@ def task_plan_project(project_id: int, payload: PlanRequest, session: Session = 
     validation = validate_task_inputs(
         db_task_units_to_dicts(session, project_id),
         db_equipment_groups_to_dicts(session, project_id),
-        db_spectrum_rules_to_dicts(session, project_id),
+        planning_spectrum_rules(session, project_id),
     )
     if not validation["ok"]:
         raise HTTPException(status_code=422, detail=validation)
@@ -756,7 +757,7 @@ def task_compare_project(project_id: int, session: Session = Depends(get_session
     validation = validate_task_inputs(
         db_task_units_to_dicts(session, project_id),
         db_equipment_groups_to_dicts(session, project_id),
-        db_spectrum_rules_to_dicts(session, project_id),
+        planning_spectrum_rules(session, project_id),
     )
     if not validation["ok"]:
         raise HTTPException(status_code=422, detail=validation)
@@ -778,7 +779,7 @@ def task_strategy_trials(project_id: int, payload: TaskReplanRequest, session: S
     validation = validate_task_inputs(
         db_task_units_to_dicts(session, project_id),
         db_equipment_groups_to_dicts(session, project_id),
-        db_spectrum_rules_to_dicts(session, project_id),
+        planning_spectrum_rules(session, project_id),
     )
     if not validation["ok"]:
         raise HTTPException(status_code=422, detail=validation)
@@ -791,7 +792,7 @@ def task_replan_project(project_id: int, payload: TaskReplanRequest, session: Se
     validation = validate_task_inputs(
         db_task_units_to_dicts(session, project_id),
         db_equipment_groups_to_dicts(session, project_id),
-        db_spectrum_rules_to_dicts(session, project_id),
+        planning_spectrum_rules(session, project_id),
     )
     if not validation["ok"]:
         raise HTTPException(status_code=422, detail=validation)
@@ -846,7 +847,7 @@ def task_visualization(
     return build_task_visualization_data(
         task_units=db_task_units_to_dicts(session, project_id),
         equipment_groups=db_equipment_groups_to_dicts(session, project_id),
-        spectrum_rules=db_spectrum_rules_to_dicts(session, project_id),
+        spectrum_rules=planning_spectrum_rules(session, project_id),
         assignments=assignments,
         risk_items=risks,
         summary=summary,
@@ -930,7 +931,7 @@ def task_report(
     visualization_data = build_task_visualization_data(
         task_units=db_task_units_to_dicts(session, project_id),
         equipment_groups=db_equipment_groups_to_dicts(session, project_id),
-        spectrum_rules=db_spectrum_rules_to_dicts(session, project_id),
+        spectrum_rules=planning_spectrum_rules(session, project_id),
         assignments=assignments,
         risk_items=risks,
         summary=summary,
@@ -977,7 +978,7 @@ def task_export(
     visualization_data = build_task_visualization_data(
         task_units=db_task_units_to_dicts(session, project_id),
         equipment_groups=db_equipment_groups_to_dicts(session, project_id),
-        spectrum_rules=db_spectrum_rules_to_dicts(session, project_id),
+        spectrum_rules=planning_spectrum_rules(session, project_id),
         assignments=assignments,
         risk_items=risks,
         summary=summary,
