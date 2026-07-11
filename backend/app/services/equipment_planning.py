@@ -120,7 +120,7 @@ def planning_spectrum_rules(session: Session, project_id: int) -> list[dict]:
     ]
     combined.extend(derived_available)
 
-    type_mapping = {"固定占用": "禁用", "临时占用": "禁用", "保护频段": "保护", "禁用频段": "禁用"}
+    type_mapping = {"固定占用": "禁用", "临时占用": "禁用", "保护频段": "保护", "禁用频段": "禁用", "干扰源": "禁用"}
     available_base_rules = [rule for rule in base_rules if rule.get("rule_type") == "可用"]
     for resource in active_resources:
         rule_type = type_mapping.get(str(resource.get("resource_type") or ""))

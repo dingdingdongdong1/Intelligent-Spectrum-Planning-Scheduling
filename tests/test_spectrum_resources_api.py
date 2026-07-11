@@ -132,6 +132,10 @@ def test_active_resource_constraints_participate_in_task_planning() -> None:
         created = client.post(f"/api/projects/{project_id}/spectrum-resources", json=protected)
         assert created.status_code == 200, created.text
 
+        jammer = _resource("JAMMER-01", "干扰源", 2205, 2208)
+        jammer.update({"region": "全域", "max_power_w": 500, "center_lat": 30.1, "center_lon": 120.1, "coverage_radius_km": 35})
+        assert client.post(f"/api/projects/{project_id}/spectrum-resources", json=jammer).status_code == 200
+
         future = _resource("FUTURE-FORBID", "禁用频段", 410.7, 410.9)
         future.update({"region": "全域", "starts_at": "2099-01-01T00:00:00", "ends_at": "2099-01-02T00:00:00"})
         assert client.post(f"/api/projects/{project_id}/spectrum-resources", json=future).status_code == 200
@@ -142,7 +146,7 @@ def test_active_resource_constraints_participate_in_task_planning() -> None:
         )
         assert planned.status_code == 200, planned.text
         summary = planned.json()["summary"]
-        assert summary["spectrum_resource_rule_count"] >= 1
+        assert summary["spectrum_resource_rule_count"] >= 2
 
         visualization = client.get(
             f"/api/projects/{project_id}/task-visualization",
@@ -156,6 +160,7 @@ def test_active_resource_constraints_participate_in_task_planning() -> None:
             if marker["kind"] in {"保护", "禁用"}
         ]
         assert any("LIVE-PROTECT" in rule_id for rule_id in timeline_rules)
+        assert any("JAMMER-01" in rule_id for rule_id in timeline_rules)
         assert all("FUTURE-FORBID" not in rule_id for rule_id in timeline_rules)
         uhf_assignments = [item for item in visualization.json()["assignments"] if item.get("band_group") == "UHF-SIM-1"]
         assert uhf_assignments

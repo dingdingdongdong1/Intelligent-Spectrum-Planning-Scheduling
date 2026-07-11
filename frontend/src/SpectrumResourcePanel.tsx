@@ -125,7 +125,7 @@ export default function SpectrumResourcePanel({ projectId, busy }: { projectId: 
             <div className="resource-form-grid">
               <TextField label="资源编号" value={form.resource_id} onChange={(value) => setForm({ ...form, resource_id: value })} />
               <TextField label="资源名称" value={form.name} onChange={(value) => setForm({ ...form, name: value })} />
-              <SelectField label="资源类型" value={form.resource_type} options={['可用频段', '固定占用', '临时占用', '保护频段', '禁用频段']} onChange={(value) => setForm({ ...form, resource_type: value })} />
+              <SelectField label="资源类型" value={form.resource_type} options={['可用频段', '固定占用', '临时占用', '保护频段', '禁用频段', '干扰源']} onChange={(value) => setForm({ ...form, resource_type: value })} />
               <SelectField label="状态" value={form.status} options={['启用', '停用']} onChange={(value) => setForm({ ...form, status: value })} />
               <TextField label="用途" value={form.purpose} onChange={(value) => setForm({ ...form, purpose: value })} />
               <TextField label="区域" value={form.region} onChange={(value) => setForm({ ...form, region: value })} />
@@ -203,5 +203,5 @@ function DateTimeField({ label, value, onChange }: { label: string; value: strin
 }
 
 function formatTime(value: string | null) { return value ? value.replace('T', ' ').slice(0, 16) : '持续有效'; }
-function resourceTone(type: string) { return type === '禁用频段' ? 'blocked' : type === '保护频段' || type.includes('占用') ? 'limited' : 'available'; }
+function resourceTone(type: string) { return type === '禁用频段' || type === '干扰源' ? 'blocked' : type === '保护频段' || type.includes('占用') ? 'limited' : 'available'; }
 function heatTone(value: number) { return value <= 10 ? 'blocked' : value < 70 ? 'limited' : 'available'; }

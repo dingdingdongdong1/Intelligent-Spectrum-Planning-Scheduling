@@ -11,9 +11,9 @@ from sqlmodel import Session, select
 from ..models import AuditLog, Project, SpectrumResource
 
 
-RESOURCE_TYPES = ("可用频段", "固定占用", "临时占用", "保护频段", "禁用频段")
-TYPE_SCORE = {"可用频段": 1.0, "临时占用": 0.3, "固定占用": 0.15, "保护频段": 0.1, "禁用频段": 0.0}
-TYPE_PRIORITY = {"可用频段": 0, "临时占用": 1, "固定占用": 2, "保护频段": 3, "禁用频段": 4}
+RESOURCE_TYPES = ("可用频段", "固定占用", "临时占用", "保护频段", "禁用频段", "干扰源")
+TYPE_SCORE = {"可用频段": 1.0, "临时占用": 0.3, "固定占用": 0.15, "保护频段": 0.1, "禁用频段": 0.0, "干扰源": 0.0}
+TYPE_PRIORITY = {"可用频段": 0, "临时占用": 1, "固定占用": 2, "保护频段": 3, "禁用频段": 4, "干扰源": 5}
 
 
 def _project(session: Session, project_id: int) -> Project:
