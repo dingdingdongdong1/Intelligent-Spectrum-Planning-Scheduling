@@ -5,6 +5,7 @@ import json
 import math
 import re
 import time
+from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from html import escape
@@ -3559,37 +3560,244 @@ def _risk_items_for_assignment(assignment: dict, group: dict, unit: dict, protec
 def _reuse_risks(assignments: list[dict], task_units: list[dict], equipment_groups: list[dict]) -> list[dict]:
     units = {item["task_unit_id"]: item for item in task_units}
     groups = {item["equipment_group_id"]: item for item in equipment_groups}
-    items = []
+    segments_by_group = {
+        item["equipment_group_id"]: _parse_resource_segments(item.get("assigned_resource") or "")
+        for item in assignments
+    }
+    items: list[dict] = []
     for a, b in combinations(assignments, 2):
         if a.get("band_group") != b.get("band_group") or not a.get("assigned_resource") or not b.get("assigned_resource"):
             continue
-        if a.get("task_unit_id") == b.get("task_unit_id"):
-            continue
-        segments_a = _parse_resource_segments(a["assigned_resource"])
-        segments_b = _parse_resource_segments(b["assigned_resource"])
-        if not any(_overlaps(x, y) for x in segments_a for y in segments_b):
+        segments_a = segments_by_group.get(a["equipment_group_id"], [])
+        segments_b = segments_by_group.get(b["equipment_group_id"], [])
+        if not segments_a or not segments_b:
             continue
         unit_a = units.get(a["task_unit_id"], {})
         unit_b = units.get(b["task_unit_id"], {})
-        distance = haversine_km(unit_a.get("area_center_lat"), unit_a.get("area_center_lon"), unit_b.get("area_center_lat"), unit_b.get("area_center_lon"))
-        protection = max(float(groups.get(a["equipment_group_id"], {}).get("protection_distance_km") or 0), float(groups.get(b["equipment_group_id"], {}).get("protection_distance_km") or 0))
-        if distance is None or distance >= protection:
-            continue
-        items.append(
+        group_a = groups.get(a["equipment_group_id"], {})
+        group_b = groups.get(b["equipment_group_id"], {})
+        items.extend(_pair_spectrum_risks(a, b, unit_a, unit_b, group_a, group_b, segments_a, segments_b))
+    items.extend(_intermodulation_risks(assignments, units, groups))
+    return items
+
+
+def _pair_spectrum_risks(
+    assignment_a: dict,
+    assignment_b: dict,
+    unit_a: dict,
+    unit_b: dict,
+    group_a: dict,
+    group_b: dict,
+    segments_a: list[Segment],
+    segments_b: list[Segment],
+) -> list[dict]:
+    gap_mhz, overlap_mhz = _segment_relation_metrics(segments_a, segments_b)
+    distance = haversine_km(
+        unit_a.get("area_center_lat"),
+        unit_a.get("area_center_lon"),
+        unit_b.get("area_center_lat"),
+        unit_b.get("area_center_lon"),
+    )
+    protection = max(float(group_a.get("protection_distance_km") or 0), float(group_b.get("protection_distance_km") or 0))
+    spacing_khz = max(
+        float(group_a.get("min_spacing_khz") or 0),
+        float(group_b.get("min_spacing_khz") or 0),
+        float(group_a.get("guard_band_khz") or 0),
+        float(group_b.get("guard_band_khz") or 0),
+    )
+    combined_power = float(group_a.get("tx_power_w") or 0) + float(group_b.get("tx_power_w") or 0)
+    max_priority = max(int(group_a.get("priority") or 1), int(group_b.get("priority") or 1), int(unit_a.get("priority") or 1), int(unit_b.get("priority") or 1))
+    distance_pressure = 0.0
+    if distance is not None and protection > 0:
+        distance_pressure = max(0.0, 1 - distance / protection)
+    power_pressure = min(1.0, math.log10(max(combined_power, 1)) / 3)
+    priority_pressure = min(1.0, max_priority / 5)
+    common = {
+        "task_unit_a": assignment_a["task_unit_id"],
+        "equipment_group_a": assignment_a["equipment_group_id"],
+        "task_unit_b": assignment_b["task_unit_id"],
+        "equipment_group_b": assignment_b["equipment_group_id"],
+        "resource_a": assignment_a["assigned_resource"],
+        "resource_b": assignment_b["assigned_resource"],
+    }
+    distance_text = f"{distance:.1f} km" if distance is not None else "未提供坐标"
+    risks: list[dict] = []
+
+    if overlap_mhz > 0:
+        occupied_width = max(
+            sum(item.width_mhz for item in segments_a),
+            sum(item.width_mhz for item in segments_b),
+            0.001,
+        )
+        overlap_pressure = min(1.0, overlap_mhz / occupied_width)
+        score = min(100.0, 48 + overlap_pressure * 14 + distance_pressure * 22 + power_pressure * 10 + priority_pressure * 6)
+        risks.append(
             {
-                "risk_type": "跨任务复用距离不足",
-                "severity": "高" if distance < protection * 0.5 else "中",
-                "task_unit_a": a["task_unit_id"],
-                "equipment_group_a": a["equipment_group_id"],
-                "task_unit_b": b["task_unit_id"],
-                "equipment_group_b": b["equipment_group_id"],
-                "resource_a": a["assigned_resource"],
-                "resource_b": b["assigned_resource"],
-                "score": round(80 - (distance / max(protection, 0.1)) * 35, 1),
-                "reason": f"两个任务单元距离 {distance:.1f} km，小于复用保护距离 {protection:.1f} km",
+                **common,
+                "risk_type": "同频冲突",
+                "severity": _task_risk_severity(score),
+                "score": round(score, 1),
+                "reason": (
+                    f"频谱重叠 {overlap_mhz * 1000:.1f} kHz；单元距离 {distance_text}，"
+                    f"保护距离 {protection:.1f} km；合计发射功率 {combined_power:.1f} W"
+                ),
             }
         )
-    return items
+        if assignment_a.get("task_unit_id") != assignment_b.get("task_unit_id"):
+            competition_score = min(100.0, score + (10 if unit_a.get("spectrum_relation") == "独占" or unit_b.get("spectrum_relation") == "独占" else 0))
+            risks.append(
+                {
+                    **common,
+                    "risk_type": "任务频谱竞争",
+                    "severity": _task_risk_severity(competition_score),
+                    "score": round(competition_score, 1),
+                    "reason": f"两个任务单元在 {assignment_a.get('band_group')} 频段争用同一资源，最高任务/装备优先级为 {max_priority}",
+                }
+            )
+    elif spacing_khz > 0 and gap_mhz * 1000 < spacing_khz:
+        shortage_khz = spacing_khz - gap_mhz * 1000
+        score = min(100.0, 42 + shortage_khz / spacing_khz * 30 + distance_pressure * 18 + power_pressure * 10)
+        risks.append(
+            {
+                **common,
+                "risk_type": "邻频冲突",
+                "severity": _task_risk_severity(score),
+                "score": round(score, 1),
+                "reason": f"实际频谱间隔 {gap_mhz * 1000:.1f} kHz，小于要求 {spacing_khz:.1f} kHz；单元距离 {distance_text}",
+            }
+        )
+        risks.append(
+            {
+                **common,
+                "risk_type": "保护间隔不足",
+                "severity": _task_risk_severity(max(35.0, score - 8)),
+                "score": round(max(35.0, score - 8), 1),
+                "reason": f"保护间隔缺口 {shortage_khz:.1f} kHz，需调整信道、带宽或保护带参数",
+            }
+        )
+
+    if distance is not None and protection > 0 and distance < protection and combined_power >= 100:
+        score = min(100.0, 35 + distance_pressure * 35 + power_pressure * 25 + priority_pressure * 5)
+        risks.append(
+            {
+                **common,
+                "risk_type": "高功率近距耦合",
+                "severity": _task_risk_severity(score),
+                "score": round(score, 1),
+                "reason": f"合计发射功率 {combined_power:.1f} W，距离 {distance:.1f} km 小于保护距离 {protection:.1f} km",
+            }
+        )
+    return risks
+
+
+def _intermodulation_risks(assignments: list[dict], units: dict[str, dict], groups: dict[str, dict]) -> list[dict]:
+    del units
+    by_band: dict[str, list[tuple[float, dict, float]]] = defaultdict(list)
+    for item in assignments:
+        center = _assignment_center_frequency(item)
+        band = str(item.get("band_group") or "")
+        if center is None or not band:
+            continue
+        group = groups.get(item["equipment_group_id"], {})
+        tolerance_mhz = max(
+            0.001,
+            float(group.get("bandwidth_khz") or 0) / 2000,
+            float(group.get("guard_band_khz") or 0) / 1000,
+            float(group.get("min_spacing_khz") or 0) / 1000,
+        )
+        by_band[band].append((center, item, tolerance_mhz))
+
+    risks: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for records in by_band.values():
+        records.sort(key=lambda row: row[0])
+        frequencies = [row[0] for row in records]
+        max_tolerance = max((row[2] for row in records), default=0.001)
+        band_risk_count = 0
+        for (freq_a, first, _), (freq_b, second, _) in combinations(records, 2):
+            if band_risk_count >= 100:
+                break
+            source_ids = {first["equipment_group_id"], second["equipment_group_id"]}
+            for product in (2 * freq_a - freq_b, 2 * freq_b - freq_a):
+                if band_risk_count >= 100:
+                    break
+                start = bisect_left(frequencies, product - max_tolerance)
+                end = bisect_right(frequencies, product + max_tolerance)
+                for victim_freq, target, tolerance_mhz in records[start:end]:
+                    if target["equipment_group_id"] in source_ids:
+                        continue
+                    delta = abs(product - victim_freq)
+                    if delta > tolerance_mhz:
+                        continue
+                    key = tuple(sorted(source_ids)) + (target["equipment_group_id"],)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    band_risk_count += 1
+                    power = float(groups.get(first["equipment_group_id"], {}).get("tx_power_w") or 0) + float(groups.get(second["equipment_group_id"], {}).get("tx_power_w") or 0)
+                    score = min(100.0, 58 + (1 - delta / tolerance_mhz) * 22 + min(15.0, math.log10(max(power, 1)) * 5))
+                    risks.append(
+                        {
+                            "risk_type": "三阶互调风险",
+                            "severity": _task_risk_severity(score),
+                            "task_unit_a": first["task_unit_id"],
+                            "equipment_group_a": first["equipment_group_id"],
+                            "task_unit_b": target["task_unit_id"],
+                            "equipment_group_b": target["equipment_group_id"],
+                            "resource_a": f"{first['assigned_resource']} + {second['assigned_resource']}",
+                            "resource_b": target["assigned_resource"],
+                            "score": round(score, 1),
+                            "reason": (
+                                f"{first['equipment_group_id']} 与 {second['equipment_group_id']} 的三阶产物 {product:.6f} MHz "
+                                f"距受扰频率 {victim_freq:.6f} MHz 仅 {delta * 1000:.1f} kHz"
+                            ),
+                        }
+                    )
+    return risks
+
+
+def _segment_gap_mhz(left: Segment, right: Segment) -> float:
+    if _overlaps(left, right):
+        return 0.0
+    return max(left.start - right.end, right.start - left.end, 0.0)
+
+
+def _segment_overlap_mhz(left: Segment, right: Segment) -> float:
+    return max(0.0, min(left.end, right.end) - max(left.start, right.start))
+
+
+def _segment_relation_metrics(left_segments: list[Segment], right_segments: list[Segment]) -> tuple[float, float]:
+    left = sorted(left_segments, key=lambda item: item.start)
+    right = sorted(right_segments, key=lambda item: item.start)
+    left_index = 0
+    right_index = 0
+    min_gap = math.inf
+    overlap = 0.0
+    while left_index < len(left) and right_index < len(right):
+        left_item = left[left_index]
+        right_item = right[right_index]
+        overlap += _segment_overlap_mhz(left_item, right_item)
+        min_gap = min(min_gap, _segment_gap_mhz(left_item, right_item))
+        if left_item.end <= right_item.end:
+            left_index += 1
+        else:
+            right_index += 1
+    return (0.0 if math.isinf(min_gap) else min_gap, overlap)
+
+
+def _assignment_center_frequency(assignment: dict) -> float | None:
+    segments = _parse_resource_segments(assignment.get("assigned_resource") or "")
+    if not segments:
+        return None
+    return sum((item.start + item.end) / 2 for item in segments) / len(segments)
+
+
+def _task_risk_severity(score: float) -> str:
+    if score >= 75:
+        return "高"
+    if score >= 35:
+        return "中"
+    return "低"
 
 
 def task_versions_and_audit(session: Session, project_id: int) -> dict:
@@ -5781,11 +5989,18 @@ def _spectrum_contention_analysis(
     for assignment in assignments:
         if assignment.get("band_group"):
             by_band[assignment["band_group"]].append(assignment)
+    available_by_band = _available_segments_by_band(spectrum_rules)
+    risk_frequencies = [
+        _first_frequency_in_text(risk.get("resource_a") or "")
+        for risk in risk_items
+        if risk.get("resource_a")
+    ]
     band_items = []
     for band, items in sorted(by_band.items()):
         equipment_counter = Counter(item.get("equipment_type") for item in items)
         blockers = [rule for rule in rules_by_band.get(band, []) if rule.get("rule_type") in {"禁用", "保护"}]
-        risk_count = sum(1 for risk in risk_items if risk.get("resource_a") and any(segment.start <= _first_frequency_in_text(risk.get("resource_a") or "") <= segment.end for segment in _available_segments_by_band(spectrum_rules).get(band, [])))
+        band_segments = available_by_band.get(band, [])
+        risk_count = sum(1 for frequency in risk_frequencies if any(segment.start <= frequency <= segment.end for segment in band_segments))
         competing_groups = []
         for item in sorted(items, key=lambda row: float(row.get("risk_score") or 0), reverse=True)[:8]:
             group = groups_by_id.get(item["equipment_group_id"], {})

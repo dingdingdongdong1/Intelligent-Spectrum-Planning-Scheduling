@@ -16,6 +16,7 @@ from backend.app.services.equipment_planning import (
     _agent_strategy_history,
     _parse_resource_segments,
     _replan_change_items,
+    _reuse_risks,
     _sanitize_trial_context,
     _strategy_constraint_variants,
     _supplement_range_for_unmet_assignment,
@@ -66,6 +67,55 @@ def test_task_solver_outputs_partial_or_full_decisions() -> None:
     assert len(result["assignments"]) == len(equipment_groups)
     assert {item["status"] for item in result["assignments"]} <= {"完全满足", "部分满足", "未满足"}
     assert result["summary"]["task_satisfaction_avg"] > 0
+
+
+def test_task_conflict_model_covers_same_frequency_spacing_power_and_intermodulation() -> None:
+    task_units = [
+        {"task_unit_id": "TU-A", "area_center_lat": 30.0, "area_center_lon": 110.0, "priority": 5, "spectrum_relation": "独占"},
+        {"task_unit_id": "TU-B", "area_center_lat": 30.01, "area_center_lon": 110.01, "priority": 4, "spectrum_relation": "可复用"},
+        {"task_unit_id": "TU-C", "area_center_lat": 30.02, "area_center_lon": 110.02, "priority": 3, "spectrum_relation": "可复用"},
+    ]
+    equipment_groups = [
+        {"equipment_group_id": "EG-A", "task_unit_id": "TU-A", "tx_power_w": 150, "protection_distance_km": 20, "min_spacing_khz": 50, "guard_band_khz": 50, "bandwidth_khz": 25, "priority": 5},
+        {"equipment_group_id": "EG-B", "task_unit_id": "TU-B", "tx_power_w": 120, "protection_distance_km": 20, "min_spacing_khz": 50, "guard_band_khz": 50, "bandwidth_khz": 25, "priority": 4},
+        {"equipment_group_id": "EG-C", "task_unit_id": "TU-C", "tx_power_w": 20, "protection_distance_km": 10, "min_spacing_khz": 50, "guard_band_khz": 50, "bandwidth_khz": 25, "priority": 3},
+        {"equipment_group_id": "EG-D", "task_unit_id": "TU-B", "tx_power_w": 20, "protection_distance_km": 10, "min_spacing_khz": 50, "guard_band_khz": 50, "bandwidth_khz": 25, "priority": 3},
+    ]
+    assignments = [
+        {"task_unit_id": "TU-A", "equipment_group_id": "EG-A", "band_group": "TEST", "assigned_resource": "100.000000 MHz"},
+        {"task_unit_id": "TU-B", "equipment_group_id": "EG-B", "band_group": "TEST", "assigned_resource": "101.000000 MHz"},
+        {"task_unit_id": "TU-C", "equipment_group_id": "EG-C", "band_group": "TEST", "assigned_resource": "99.000000 MHz"},
+        {"task_unit_id": "TU-B", "equipment_group_id": "EG-D", "band_group": "TEST", "assigned_resource": "100.000000 MHz"},
+    ]
+
+    risks = _reuse_risks(assignments, task_units, equipment_groups)
+    risk_types = {item["risk_type"] for item in risks}
+
+    assert "同频冲突" in risk_types
+    assert "任务频谱竞争" in risk_types
+    assert "高功率近距耦合" in risk_types
+    assert "三阶互调风险" in risk_types
+    assert all(0 <= item["score"] <= 100 for item in risks)
+
+
+def test_task_conflict_model_reports_adjacent_and_guard_shortage() -> None:
+    task_units = [
+        {"task_unit_id": "TU-A", "area_center_lat": 30.0, "area_center_lon": 110.0, "priority": 2},
+        {"task_unit_id": "TU-B", "area_center_lat": 31.0, "area_center_lon": 111.0, "priority": 2},
+    ]
+    equipment_groups = [
+        {"equipment_group_id": "EG-A", "task_unit_id": "TU-A", "tx_power_w": 10, "protection_distance_km": 5, "min_spacing_khz": 100, "guard_band_khz": 100, "bandwidth_khz": 25},
+        {"equipment_group_id": "EG-B", "task_unit_id": "TU-B", "tx_power_w": 10, "protection_distance_km": 5, "min_spacing_khz": 100, "guard_band_khz": 100, "bandwidth_khz": 25},
+    ]
+    assignments = [
+        {"task_unit_id": "TU-A", "equipment_group_id": "EG-A", "band_group": "TEST", "assigned_resource": "410.000000 MHz"},
+        {"task_unit_id": "TU-B", "equipment_group_id": "EG-B", "band_group": "TEST", "assigned_resource": "410.050000 MHz"},
+    ]
+
+    risks = _reuse_risks(assignments, task_units, equipment_groups)
+    risk_types = {item["risk_type"] for item in risks}
+
+    assert {"邻频冲突", "保护间隔不足"} <= risk_types
 
 
 def test_all_task_objectives_are_supported() -> None:

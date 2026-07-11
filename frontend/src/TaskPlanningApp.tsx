@@ -94,6 +94,7 @@ import {
 } from './api';
 import TaskWorkbench from './TaskWorkbench';
 import SpectrumResourcePanel from './SpectrumResourcePanel';
+import { InterferenceAnalysisPanel } from './InterferenceAnalysisPanel';
 type Notice = {
   type: 'info' | 'error' | 'success';
   text: string;
@@ -1221,8 +1222,8 @@ export default function TaskPlanningApp() {
             )}
 
             {activeModule === 'interference' && (
-              <div id="dashboard-interference" className="dashboard-section dashboard-page-narrow">
-                <ReferenceInterferenceAlerts risks={pageRiskItems} bands={pageTopBands} />
+              <div id="dashboard-interference" className="dashboard-section dashboard-page-wide">
+                <InterferenceAnalysisPanel risks={pageRiskItems} bands={pageTopBands} />
               </div>
             )}
 
