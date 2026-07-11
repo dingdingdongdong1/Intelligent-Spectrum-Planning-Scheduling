@@ -1586,6 +1586,13 @@ textarea {
 .overview-band-list > div > i { background: #e9eef5; border-radius: 3px; display: block; height: 6px; margin: 4px 0; overflow: hidden; }
 .overview-band-list > div > i > b { background: #2a66f6; display: block; height: 100%; }
 .overview-band-list small { color: #667085; }
+.overview-band-list .overview-band-range {
+  color: #667085;
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 2px;
+}
 
 .overview-risk-list,
 .overview-action-list { display: grid; gap: 7px; }
@@ -1614,6 +1621,89 @@ textarea {
 .overview-lifecycle-metrics span { color: #667085; font-size: 11px; }
 .overview-lifecycle-metrics strong { font-size: 18px; margin-top: 3px; }
 .lifecycle-overview > p { color: #52647f; font-size: 12px; margin: 10px 0 0; }
+
+.task-shell .dashboard-frame.navigation-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+.task-shell .dashboard-frame.navigation-collapsed > .dashboard-side-rail {
+  display: none;
+}
+
+.navigation-backdrop,
+.side-rail-close {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .task-shell .dashboard-frame.mobile-navigation-open > .dashboard-side-rail {
+    bottom: 0;
+    display: grid !important;
+    left: 0;
+    min-height: 100vh;
+    overflow-y: auto;
+    position: fixed;
+    top: 0;
+    width: min(300px, calc(100vw - 44px));
+    z-index: 100;
+  }
+
+  .task-shell .dashboard-frame.mobile-navigation-open .side-rail-brand {
+    justify-content: flex-start;
+    padding-right: 36px;
+    position: relative;
+  }
+
+  .task-shell .dashboard-frame.mobile-navigation-open .side-rail-brand div,
+  .task-shell .dashboard-frame.mobile-navigation-open .side-rail-nav button span,
+  .task-shell .dashboard-frame.mobile-navigation-open .side-rail-status,
+  .task-shell .dashboard-frame.mobile-navigation-open .side-rail-user,
+  .task-shell .dashboard-frame.mobile-navigation-open .side-rail-report {
+    display: initial;
+  }
+
+  .task-shell .dashboard-frame.mobile-navigation-open .side-rail-nav button {
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+
+  .task-shell .dashboard-frame.mobile-navigation-open .side-rail-status {
+    display: block;
+  }
+
+  .task-shell .dashboard-frame.mobile-navigation-open .side-rail-user {
+    display: grid;
+  }
+
+  .navigation-backdrop {
+    background: rgba(3, 14, 31, 0.48);
+    border: 0;
+    border-radius: 0;
+    display: block;
+    inset: 0;
+    min-height: 100vh;
+    padding: 0;
+    position: fixed;
+    width: 100vw;
+    z-index: 90;
+  }
+
+  .side-rail-close {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: #ffffff;
+    display: inline-flex;
+    height: 32px;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 32px;
+  }
+}
 
 .task-shell .dashboard-brand p {
   color: #445875;

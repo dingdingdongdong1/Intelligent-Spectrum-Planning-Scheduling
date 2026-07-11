@@ -74,6 +74,9 @@ def test_demo_generation_commits_all_data_once(
         assert session.rollback_calls == 0
 
     with Session(engine) as session:
+        project = session.get(Project, project_id)
+        assert project is not None
+        assert project.name == result["project_name"]
         assert len(session.exec(select(TaskUnit).where(TaskUnit.project_id == project_id)).all()) == result["task_unit_count"]
         assert len(session.exec(select(EquipmentGroup).where(EquipmentGroup.project_id == project_id)).all()) == result["equipment_group_count"]
         assert len(session.exec(select(SpectrumRule).where(SpectrumRule.project_id == project_id)).all()) == result["spectrum_rule_count"]
@@ -93,6 +96,7 @@ def _project_snapshot(session: Session, project_id: int) -> dict:
     project = session.get(Project, project_id)
     assert project is not None
     return {
+        "name": project.name,
         "status": project.status,
         "task_units": [
             row.model_dump()
@@ -163,4 +167,3 @@ def test_public_replace_operations_still_commit_successfully() -> None:
         assert len(session.exec(select(TaskUnit).where(TaskUnit.project_id == project_id)).all()) == 1
         assert len(session.exec(select(EquipmentGroup).where(EquipmentGroup.project_id == project_id)).all()) == 1
         assert len(session.exec(select(SpectrumRule).where(SpectrumRule.project_id == project_id)).all()) == 1
-

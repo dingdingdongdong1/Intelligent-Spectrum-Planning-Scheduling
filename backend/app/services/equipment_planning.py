@@ -213,9 +213,15 @@ def _replace_demo_scenario_records(
     mission: dict,
     phases: list[dict],
     links: list[dict],
+    project_name: str,
     audit_log: AuditLog,
 ) -> None:
     try:
+        project = session.get(Project, project_id)
+        if project is not None:
+            project.name = project_name
+            project.updated_at = datetime.utcnow()
+            session.add(project)
         session.exec(delete(TaskLink).where(TaskLink.project_id == project_id))
         session.exec(delete(TaskPhase).where(TaskPhase.project_id == project_id))
         session.exec(delete(MissionTask).where(MissionTask.project_id == project_id))
@@ -241,7 +247,7 @@ def task_scenario_library() -> list[dict]:
 def generate_demo_scenario(session: Session, project_id: int, scenario: str = "baseline") -> dict:
     task_units, equipment_groups, spectrum_rules = demo_scenario_records(scenario)
     scenario_info = next((item for item in TASK_SCENARIOS if item["key"] == scenario), TASK_SCENARIOS[0])
-    mission, phases, links = _demo_context_records(scenario, scenario_info, task_units, equipment_groups)
+    mission, phases, links, project_name = _demo_context_records(scenario, scenario_info, task_units, equipment_groups)
     _replace_demo_scenario_records(
         session,
         project_id,
@@ -251,6 +257,7 @@ def generate_demo_scenario(session: Session, project_id: int, scenario: str = "b
         mission,
         phases,
         links,
+        project_name,
         AuditLog(project_id=project_id, action="generate_demo_scenario", detail=f"生成{scenario_info['name']}仿真场景"),
     )
     return {
@@ -262,13 +269,15 @@ def generate_demo_scenario(session: Session, project_id: int, scenario: str = "b
         "mission_count": 1,
         "phase_count": len(phases),
         "link_count": len(links),
+        "project_name": project_name,
+        "mission_name": mission["name"],
     }
 
 
 def generate_parametric_demo_scenario(session: Session, project_id: int, payload: dict) -> dict:
     task_units, equipment_groups, spectrum_rules = parametric_demo_records(payload)
     scenario_info = {"key": "parametric", "name": "参数化仿真样例", "description": "按用户参数生成的完整任务筹划样例。"}
-    mission, phases, links = _demo_context_records("parametric", scenario_info, task_units, equipment_groups)
+    mission, phases, links, project_name = _demo_context_records("parametric", scenario_info, task_units, equipment_groups)
     _replace_demo_scenario_records(
         session,
         project_id,
@@ -278,6 +287,7 @@ def generate_parametric_demo_scenario(session: Session, project_id: int, payload
         mission,
         phases,
         links,
+        project_name,
         AuditLog(
             project_id=project_id,
             action="generate_parametric_demo_scenario",
@@ -301,6 +311,8 @@ def generate_parametric_demo_scenario(session: Session, project_id: int, payload
         "mission_count": 1,
         "phase_count": len(phases),
         "link_count": len(links),
+        "project_name": project_name,
+        "mission_name": mission["name"],
         "parameters": _normalized_parametric_payload(payload),
     }
 
@@ -718,9 +730,12 @@ def _demo_context_records(
     scenario_info: dict,
     task_units: list[dict],
     equipment_groups: list[dict],
-) -> tuple[dict, list[dict], list[dict]]:
+) -> tuple[dict, list[dict], list[dict], str]:
     starts_at = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
     ends_at = starts_at + timedelta(hours=24)
+    scenario_name = str(scenario_info["name"]).removeprefix("SIM ").strip()
+    display_name = f"公开战例仿真-{scenario_name}" if scenario_key.startswith("sim_") else scenario_name
+    project_name = f"{display_name}-用频筹划-{datetime.now():%Y%m%d}"
     latitudes = [float(item["area_center_lat"]) for item in task_units if item.get("area_center_lat") is not None]
     longitudes = [float(item["area_center_lon"]) for item in task_units if item.get("area_center_lon") is not None]
     center_lat = round(sum(latitudes) / len(latitudes), 6) if latitudes else None
@@ -735,7 +750,7 @@ def _demo_context_records(
     identifier = re.sub(r"[^A-Za-z0-9]+", "-", scenario_key.upper()).strip("-") or "BASELINE"
     mission = {
         "mission_id": f"MISSION-{identifier}",
-        "name": f"{scenario_info['name']}用频筹划任务",
+        "name": f"{display_name}-用频筹划任务",
         "mission_type": "演训任务",
         "description": f"{scenario_info.get('description', '')} 本任务包全部位置、频率和装备参数均为仿真值。",
         "priority": 8,
@@ -775,7 +790,7 @@ def _demo_context_records(
     for group in equipment_groups:
         groups_by_unit[str(group.get("task_unit_id") or "")].append(group)
     if not task_units:
-        return mission, phases, []
+        return mission, phases, [], project_name
     anchor = max(task_units, key=lambda item: (int(item.get("priority") or 0), str(item.get("task_unit_id") or "")))
     anchor_id = str(anchor.get("task_unit_id") or "")
     anchor_groups = groups_by_unit.get(anchor_id, [])
@@ -805,7 +820,7 @@ def _demo_context_records(
                 "notes": "由仿真数据预设自动生成，可按实际保障关系调整。",
             }
         )
-    return mission, phases, links
+    return mission, phases, links, project_name
 
 
 def _snapshot_rows(session: Session, model: type, project_id: int) -> list[dict]:
@@ -2545,10 +2560,14 @@ def build_task_visualization_data(
 
     band_usage = []
     for band in sorted({rule.get("band_group") for rule in spectrum_rules if rule.get("band_group")}):
-        available_width = sum(
-            max(0, float(rule.get("end_mhz") or 0) - float(rule.get("start_mhz") or 0))
+        available_rules = [
+            rule
             for rule in spectrum_rules
             if rule.get("band_group") == band and rule.get("rule_type") == "可用"
+        ]
+        available_width = sum(
+            max(0, float(rule.get("end_mhz") or 0) - float(rule.get("start_mhz") or 0))
+            for rule in available_rules
         )
         used_segments = []
         for assignment in assignments:
@@ -2563,6 +2582,13 @@ def build_task_visualization_data(
                 "used_width_mhz": round(used_width, 3),
                 "utilization_pct": round(used_width / available_width * 100, 2) if available_width else 0,
                 "assignment_count": len([item for item in assignments if item.get("band_group") == band]),
+                "available_ranges": [
+                    {
+                        "start_mhz": float(rule.get("start_mhz") or 0),
+                        "end_mhz": float(rule.get("end_mhz") or 0),
+                    }
+                    for rule in sorted(available_rules, key=lambda item: float(item.get("start_mhz") or 0))
+                ],
                 "rules": [rule for rule in spectrum_rules if rule.get("band_group") == band and rule.get("rule_type") in {"禁用", "保护"}],
             }
         )

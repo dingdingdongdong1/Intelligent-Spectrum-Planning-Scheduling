@@ -478,6 +478,10 @@ export type BandUsageView = {
   used_width_mhz: number;
   utilization_pct: number;
   assignment_count: number;
+  available_ranges: Array<{
+    start_mhz: number;
+    end_mhz: number;
+  }>;
   rules: Array<{
     rule_id: string;
     rule_type: string;

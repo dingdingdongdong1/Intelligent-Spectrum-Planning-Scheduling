@@ -29,6 +29,7 @@ import {
   Trash2,
   Upload,
   WandSparkles,
+  X,
 } from 'lucide-react';
 import {
   BottleneckAnalysis,
@@ -157,7 +158,7 @@ type DashboardModuleKey =
   | 'system';
 
 const dashboardModuleTitles: Record<DashboardModuleKey, string> = {
-  overview: '项目总览',
+  overview: '主看板',
   tasks: '任务管理',
   spectrumResources: '频谱资源',
   plan: '规划方案',
@@ -181,6 +182,9 @@ export default function TaskPlanningApp() {
   const [taskMission, setTaskMission] = useState<MissionTaskRecord | null>(null);
   const [taskDataRevision, setTaskDataRevision] = useState(0);
   const [activeModule, setActiveModule] = useState<DashboardModuleKey>('overview');
+  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  const [narrowNavigation, setNarrowNavigation] = useState(() => window.matchMedia('(max-width: 1180px)').matches);
   const [objectives, setObjectives] = useState<TaskObjective[]>(defaultObjectives);
   const [objective, setObjective] = useState('task_assurance');
   const [constraintWeights, setConstraintWeights] = useState<ConstraintWeights>(defaultConstraintWeights);
@@ -265,6 +269,25 @@ export default function TaskPlanningApp() {
         void openProject(selected, false);
       })
       .catch(() => setProjects([]));
+  }, []);
+
+  useEffect(() => {
+    if (!mobileNavigationOpen) return undefined;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileNavigationOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [mobileNavigationOpen]);
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1180px)');
+    const updateNavigationMode = () => {
+      setNarrowNavigation(media.matches);
+      if (!media.matches) setMobileNavigationOpen(false);
+    };
+    media.addEventListener('change', updateNavigationMode);
+    return () => media.removeEventListener('change', updateNavigationMode);
   }, []);
 
   async function runAction<T>(action: () => Promise<T>, success: string): Promise<T | null> {
@@ -449,6 +472,7 @@ export default function TaskPlanningApp() {
     }
     const result = await runAction(() => generateTaskDemo(project.id, scenario), '已生成任务场景样例');
     if (result) {
+      syncGeneratedProjectName(result);
       clearPlanningState();
       await refreshSpectrumRules(project.id);
       await refreshTaskDataSummary(project.id);
@@ -463,11 +487,23 @@ export default function TaskPlanningApp() {
     }
     const result = await runAction(() => generateParametricTaskDemo(project.id, parametricPayload), '已生成参数化任务场景');
     if (result) {
+      syncGeneratedProjectName(result);
       clearPlanningState();
       await refreshSpectrumRules(project.id);
       await refreshTaskDataSummary(project.id);
       setTaskDataRevision((current) => current + 1);
     }
+  }
+
+  function syncGeneratedProjectName(result: Record<string, unknown>) {
+    if (!project) return;
+    const generatedName = stringValue(result.project_name);
+    if (!generatedName) return;
+    const updatedProject = { ...project, name: generatedName };
+    setProject(updatedProject);
+    setProjectName(generatedName);
+    setProjectRenameName(generatedName);
+    setProjects((current) => current.map((item) => (item.id === project.id ? updatedProject : item)));
   }
 
   async function handleUpload(kind: 'task-units' | 'equipment-groups' | 'spectrum-rules') {
@@ -989,7 +1025,7 @@ export default function TaskPlanningApp() {
 
   return (
     <main className="shell task-shell dashboard-shell">
-      <div className="dashboard-frame">
+      <div className={`dashboard-frame${navigationCollapsed ? ' navigation-collapsed' : ''}${mobileNavigationOpen ? ' mobile-navigation-open' : ''}`}>
         <DashboardSideRail
           project={project}
           plan={plan}
@@ -997,10 +1033,30 @@ export default function TaskPlanningApp() {
           agentAssessment={agentAssessment}
           reportUrl={reportUrl}
           activeModule={activeModule}
-          onModuleChange={setActiveModule}
+          onModuleChange={(module) => {
+            setActiveModule(module);
+            setMobileNavigationOpen(false);
+          }}
+          onClose={() => setMobileNavigationOpen(false)}
         />
+        {mobileNavigationOpen && (
+          <button className="navigation-backdrop" type="button" aria-label="关闭导航" onClick={() => setMobileNavigationOpen(false)} />
+        )}
         <div className="dashboard-main-stack">
-          <ReferenceTopBar project={project} plan={plan} reportUrl={reportUrl} title={activeModuleTitle} />
+          <ReferenceTopBar
+            project={project}
+            plan={plan}
+            reportUrl={reportUrl}
+            title={activeModuleTitle}
+            navigationExpanded={narrowNavigation ? mobileNavigationOpen : !navigationCollapsed}
+            onToggleNavigation={() => {
+              if (narrowNavigation) {
+                setMobileNavigationOpen((current) => !current);
+              } else {
+                setNavigationCollapsed((current) => !current);
+              }
+            }}
+          />
           <ReferenceProjectBar
             project={project}
             mission={taskMission}
@@ -1133,6 +1189,7 @@ export default function TaskPlanningApp() {
             ))}
           </select>
           <p className="objective-help">用途：{scenarios.find((item) => item.key === scenario)?.description}</p>
+          <p className="objective-help">生成预设后，项目名称与任务名称将按所选场景同步更新。</p>
           <button className="wide secondary" onClick={handleGenerateDemo} disabled={busy || !project}>
             <WandSparkles size={16} />
             生成样例场景
@@ -1518,7 +1575,21 @@ export default function TaskPlanningApp() {
   );
 }
 
-function ReferenceTopBar({ project, plan, reportUrl, title }: { project: Project | null; plan: PlanResult | null; reportUrl: string; title: string }) {
+function ReferenceTopBar({
+  project,
+  plan,
+  reportUrl,
+  title,
+  navigationExpanded,
+  onToggleNavigation,
+}: {
+  project: Project | null;
+  plan: PlanResult | null;
+  reportUrl: string;
+  title: string;
+  navigationExpanded: boolean;
+  onToggleNavigation: () => void;
+}) {
   const clock = new Date().toLocaleString('zh-CN', {
     hour12: false,
     year: 'numeric',
@@ -1532,7 +1603,13 @@ function ReferenceTopBar({ project, plan, reportUrl, title }: { project: Project
   return (
     <header className="reference-topbar" aria-label="顶部运行状态栏">
       <div className="reference-title">
-        <button className="icon-button ghost" type="button" aria-label="展开导航">
+        <button
+          className="icon-button ghost"
+          type="button"
+          aria-label={navigationExpanded ? '收起导航' : '展开导航'}
+          aria-expanded={navigationExpanded}
+          onClick={onToggleNavigation}
+        >
           <Menu size={20} />
         </button>
         <strong>{title}</strong>
@@ -1858,6 +1935,7 @@ function DashboardSideRail({
   reportUrl,
   activeModule,
   onModuleChange,
+  onClose,
 }: {
   project: Project | null;
   plan: PlanResult | null;
@@ -1866,13 +1944,14 @@ function DashboardSideRail({
   reportUrl: string;
   activeModule: DashboardModuleKey;
   onModuleChange: (module: DashboardModuleKey) => void;
+  onClose: () => void;
 }) {
   const summary = visualization?.summary ?? plan?.summary ?? {};
   const satisfaction = numberValue(summary.task_satisfaction_avg);
   const highRiskCount = numberValue(summary.high_risk_count) ?? 0;
   const quality = dashboardFirstNumber(numberValue(recordValue(summary.quality_scores).total), numberValue(summary.quality_total));
   const navItems = [
-    { module: 'overview' as const, label: '项目总览', icon: <Layers3 size={16} /> },
+    { module: 'overview' as const, label: '主看板', icon: <Layers3 size={16} /> },
     { module: 'tasks' as const, label: '任务管理', icon: <ClipboardList size={16} /> },
     { module: 'spectrumResources' as const, label: '频谱资源', icon: <RadioTower size={16} /> },
     { module: 'plan' as const, label: '规划方案', icon: <FileCheck2 size={16} /> },
@@ -1896,6 +1975,9 @@ function DashboardSideRail({
           <strong>战场智能用频筹划平台</strong>
           <em>任务保障与动态重筹中枢</em>
         </div>
+        <button className="side-rail-close" type="button" aria-label="关闭导航" onClick={onClose}>
+          <X size={18} />
+        </button>
       </div>
       <nav className="side-rail-nav">
         {navItems.map((item) => (
@@ -2155,7 +2237,13 @@ function TaskDashboardOverview({
             <div className="overview-band-list">
               {topBands.map((band) => (
                 <div key={band.band_group}>
-                  <span><b>{band.band_group}</b><em>{band.utilization_pct.toFixed(1)}%</em></span>
+                  <span>
+                    <b>
+                      {band.band_group}
+                      <small className="overview-band-range">{formatBandRanges(band.available_ranges ?? [])}</small>
+                    </b>
+                    <em>{band.utilization_pct.toFixed(1)}%</em>
+                  </span>
                   <i><b style={{ width: `${Math.min(100, band.utilization_pct)}%` }} /></i>
                   <small>已用 {band.used_width_mhz.toFixed(2)} / {band.available_width_mhz.toFixed(2)} MHz</small>
                 </div>
@@ -5716,6 +5804,14 @@ function suggestedProjectName(sceneName: string): string {
   const date = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
   const scene = sceneName.replace(/^SIM\s*/i, '公开战例仿真-').trim() || '联合任务';
   return `${scene}-用频筹划-${date}`;
+}
+
+function formatBandRanges(ranges: Array<{ start_mhz: number; end_mhz: number }>): string {
+  if (!ranges.length) return '频率范围待配置';
+  return ranges
+    .slice(0, 2)
+    .map((range) => `${range.start_mhz.toFixed(3)}-${range.end_mhz.toFixed(3)} MHz`)
+    .join('；');
 }
 
 function scenarioProjectBaseName(scenario: TaskScenario | undefined): string {

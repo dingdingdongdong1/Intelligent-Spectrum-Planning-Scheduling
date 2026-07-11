@@ -43,9 +43,11 @@ def test_task_planning_api_end_to_end_acceptance_flow() -> None:
         assert demo["mission_count"] == 1
         assert demo["phase_count"] == 3
         assert demo["link_count"] == demo["task_unit_count"] - 1
+        assert demo["project_name"].startswith("大型联合演训-用频筹划-")
+        assert demo["mission_name"] == "大型联合演训-用频筹划任务"
 
         task_data = _assert_ok(client.get(f"/api/projects/{project_id}/task-data"))
-        assert task_data["mission"]["name"] == "大型联合演训用频筹划任务"
+        assert task_data["mission"]["name"] == demo["mission_name"]
         assert len(task_data["phases"]) == 3
         assert all(item["status"] == "待开始" for item in task_data["phases"])
         assert len(task_data["links"]) == demo["task_unit_count"] - 1
@@ -73,6 +75,8 @@ def test_task_planning_api_end_to_end_acceptance_flow() -> None:
         assert visualization["assignments"]
         assert visualization["task_units"]
         assert visualization["band_usage"]
+        assert all(item["available_ranges"] for item in visualization["band_usage"])
+        assert all(item["available_ranges"][0]["start_mhz"] < item["available_ranges"][0]["end_mhz"] for item in visualization["band_usage"])
         assert visualization["spectrum_timeline"]
         assert visualization["summary"]["bottleneck_analysis"]["band_bottlenecks"]
         assert any(item["alternative_resources"] for item in visualization["assignments"])
