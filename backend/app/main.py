@@ -30,6 +30,7 @@ from .schemas import (
     TaskPhasePayload,
     TaskCapacityBatchRequest,
     TaskCapacityRiskClosureRequest,
+    TaskIntentRequest,
     TaskObjectiveResponse,
     TaskReplanRequest,
     TaskSampleCatalogResponse,
@@ -82,6 +83,7 @@ from .services.equipment_planning import (
 )
 from .services.task_catalog import TASK_OBJECTIVES
 from .services import spectrum_resources, task_workbench
+from .services.task_intent import parse_task_intent
 from .services.excel_io import (
     build_equipment_group_template,
     build_rule_template,
@@ -854,6 +856,38 @@ def task_agent_assessment(
 ) -> dict:
     _require_project(session, project_id)
     return task_agent_capability_assessment(session, project_id, run_id)
+
+
+@app.post("/api/projects/{project_id}/task-intent")
+async def task_intent(
+    project_id: int,
+    payload: TaskIntentRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    _require_project(session, project_id)
+    result = parse_task_intent(payload.message)
+    explanation, source = await LLMClient().explain_task_intent(payload.message, result)
+    result["explanation"] = explanation
+    result["explanation_source"] = source
+    session.add(
+        AuditLog(
+            project_id=project_id,
+            actor="user",
+            action="task_intent_interpreted",
+            detail=json.dumps(
+                {
+                    "objective": result["objective"],
+                    "confidence": result["confidence"],
+                    "recognized_item_count": len(result["recognized_items"]),
+                    "warning_count": len(result["warnings"]),
+                    "explanation_source": source,
+                },
+                ensure_ascii=False,
+            ),
+        )
+    )
+    session.commit()
+    return result
 
 
 @app.get("/api/projects/{project_id}/task-visualization")

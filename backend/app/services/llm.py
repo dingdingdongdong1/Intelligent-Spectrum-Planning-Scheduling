@@ -32,6 +32,22 @@ class LLMClient:
         )
         return await self._chat(prompt) or fallback
 
+    async def explain_task_intent(self, message: str, parsed: dict) -> tuple[str, str]:
+        fallback = str(parsed.get("explanation") or "")
+        if not self.settings.openai_compat_api_key:
+            return fallback, "deterministic"
+        prompt = (
+            "解释以下指挥意图解析结果。只解释确定性解析器已经识别的目标、对象和约束，"
+            "不得补充频率、位置、装备或执行动作。明确说明需要人工确认后才会重规划。\n"
+            f"原始意图：{message}\n"
+            f"解析结果：{_safe_task_intent(parsed)}"
+        )
+        try:
+            content = await self._chat(prompt)
+        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            return fallback, "deterministic_fallback"
+        return content or fallback, "llm_enhanced"
+
     async def _chat(self, prompt: str) -> str:
         headers = {
             "Authorization": f"Bearer {self.settings.openai_compat_api_key}",
@@ -58,6 +74,15 @@ def _safe_summary(data: dict) -> dict:
         "errors": data.get("errors", [])[:20],
         "warnings": data.get("warnings", [])[:20],
         "summary": data.get("summary", {}),
+    }
+
+
+def _safe_task_intent(data: dict) -> dict:
+    return {
+        "objective_label": data.get("objective_label"),
+        "confidence": data.get("confidence"),
+        "recognized_items": data.get("recognized_items", [])[:20],
+        "warnings": data.get("warnings", [])[:10],
     }
 
 

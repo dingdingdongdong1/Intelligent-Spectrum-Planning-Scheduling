@@ -2415,6 +2415,64 @@ textarea {
   margin: 0;
 }
 
+.intent-card textarea {
+  border: 1px solid #cfd8e6;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  line-height: 1.5;
+  margin: 8px 0;
+  min-height: 76px;
+  padding: 9px 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+.intent-result {
+  border-top: 1px solid #e1e7f2;
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.intent-result-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.intent-result-head span,
+.intent-result em {
+  color: #69758c;
+  font-size: 12px;
+}
+
+.intent-items {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.intent-items span {
+  background: #f5f8fd;
+  border: 1px solid #dbe3ef;
+  border-radius: 5px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  padding: 6px 7px;
+}
+
+.intent-items b {
+  color: #526078;
+  display: block;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.intent-error { color: #b42318 !important; }
+
 .assistant-card p,
 .decision-plan-card p,
 .assistant-action p,

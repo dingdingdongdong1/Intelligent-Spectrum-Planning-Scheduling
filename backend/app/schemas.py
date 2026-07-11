@@ -129,6 +129,10 @@ class ChatRequest(BaseModel):
     objective: str = "minimize_interference"
 
 
+class TaskIntentRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+
+
 class ChatResponse(BaseModel):
     reply: str
     run_id: int | None = None

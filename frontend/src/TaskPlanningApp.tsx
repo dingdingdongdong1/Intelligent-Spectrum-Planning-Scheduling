@@ -47,6 +47,7 @@ import {
   TaskComparisonPlan,
   TaskComparisonResult,
   TaskAgentAssessment,
+  TaskIntentResult,
   TaskObjective,
   TaskPerformanceResult,
   TaskProjectData,
@@ -78,6 +79,7 @@ import {
   getTaskScenarios,
   getTaskVersions,
   getTaskVisualization,
+  interpretTaskIntent,
   listTaskSpectrumRules,
   listProjects,
   planTaskProject,
@@ -824,6 +826,7 @@ export default function TaskPlanningApp() {
       return;
     }
 
+    setActiveModule('replan');
     const overrides = replanOverridesFromAction(action);
     applyReplanOverridesToForm(overrides, action.suggested_message);
     const payload = buildReplanPayload(overrides, action.suggested_message);
@@ -832,7 +835,7 @@ export default function TaskPlanningApp() {
     if (result) {
       setReplanPreview(result);
       setReplanConfirmed(false);
-      document.getElementById('task-replan-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.requestAnimationFrame(() => document.getElementById('task-replan-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     }
   }
 
@@ -1588,6 +1591,10 @@ function DecisionAssistantPanel({
   onApplyAction: (action: AgentSuggestedAction) => void;
 }) {
   const [activeTab, setActiveTab] = useState<'replan' | 'decision' | 'risk'>('replan');
+  const [intentText, setIntentText] = useState('关键任务优先，避开 2200-2210 MHz，锁定 TU-CMD，不允许降级');
+  const [intentResult, setIntentResult] = useState<TaskIntentResult | null>(null);
+  const [intentBusy, setIntentBusy] = useState(false);
+  const [intentError, setIntentError] = useState('');
   const summary = visualization?.summary ?? plan?.summary ?? {};
   const riskItems = visualization?.risk_items ?? [];
   const highRiskCount = riskItems.filter((item) => isHighRiskSeverity(item.severity)).length;
@@ -1608,6 +1615,31 @@ function DecisionAssistantPanel({
           recommended: true,
         } as TaskComparisonPlan,
       ];
+
+  async function analyzeIntent() {
+    if (!project || !intentText.trim()) return;
+    setIntentBusy(true);
+    setIntentError('');
+    try {
+      setIntentResult(await interpretTaskIntent(project.id, intentText.trim()));
+    } catch (error) {
+      setIntentError(error instanceof Error ? error.message : '意图解析失败');
+    } finally {
+      setIntentBusy(false);
+    }
+  }
+
+  function applyIntent() {
+    if (!intentResult) return;
+    onApplyAction({
+      action_id: 'commander_intent',
+      priority: '高',
+      title: `应用意图：${intentResult.objective_label}`,
+      why: intentResult.explanation,
+      suggested_message: intentResult.message,
+      deterministic_payload: intentResult.deterministic_payload,
+    });
+  }
 
   return (
     <aside className="decision-assistant-panel" aria-label="智能决策助手">
@@ -1634,6 +1666,30 @@ function DecisionAssistantPanel({
 
       {activeTab === 'replan' && (
         <div className="assistant-section-stack">
+          <section className="assistant-card intent-card">
+            <h3>指挥意图理解</h3>
+            <textarea value={intentText} onChange={(event) => setIntentText(event.target.value)} rows={3} aria-label="输入指挥意图" />
+            <button type="button" onClick={() => void analyzeIntent()} disabled={intentBusy || busy || !project || !intentText.trim()}>
+              {intentBusy ? '解析中...' : '解析意图'}
+            </button>
+            {intentError && <p className="intent-error">{intentError}</p>}
+            {intentResult && (
+              <div className="intent-result">
+                <div className="intent-result-head">
+                  <strong>{intentResult.objective_label}</strong>
+                  <span>置信度 {Math.round(intentResult.confidence * 100)}%</span>
+                </div>
+                <p>{intentResult.explanation}</p>
+                <div className="intent-items">
+                  {intentResult.recognized_items.slice(0, 6).map((item, index) => (
+                    <span key={`${item.type}-${item.target}-${index}`}><b>{item.type}</b>{item.target}</span>
+                  ))}
+                </div>
+                {intentResult.warnings.map((warning) => <em key={warning}>{warning}</em>)}
+                <button type="button" onClick={applyIntent} disabled={busy}>转为预案</button>
+              </div>
+            )}
+          </section>
           <section className="assistant-card current">
             <span className="section-marker" />
             <h3>当前态势</h3>

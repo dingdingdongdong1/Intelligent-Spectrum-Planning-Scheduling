@@ -1290,6 +1290,19 @@ export type TaskAgentAssessment = {
   }>;
 };
 
+export type TaskIntentResult = {
+  message: string;
+  objective: string;
+  objective_label: string;
+  confidence: number;
+  recognized_items: Array<{ type: string; target: string; detail: string }>;
+  warnings: string[];
+  deterministic_payload: Partial<TaskReplanPayload>;
+  requires_confirmation: boolean;
+  explanation: string;
+  explanation_source: 'deterministic' | 'deterministic_fallback' | 'llm_enhanced';
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init);
   if (!response.ok) {
@@ -1632,6 +1645,14 @@ export async function rollbackTaskPlan(projectId: number, runId: number): Promis
 export async function getTaskAgentAssessment(projectId: number, runId?: number | null): Promise<TaskAgentAssessment> {
   const query = runId ? `?run_id=${runId}` : '';
   return request<TaskAgentAssessment>(`/api/projects/${projectId}/task-agent-assessment${query}`);
+}
+
+export async function interpretTaskIntent(projectId: number, message: string): Promise<TaskIntentResult> {
+  return request<TaskIntentResult>(`/api/projects/${projectId}/task-intent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
 }
 
 export async function runProjectTaskBatchPerformanceTest(projectId: number): Promise<TaskPerformanceResult> {
