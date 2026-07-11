@@ -8,7 +8,7 @@ import time
 from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import escape
 from itertools import combinations
 from pathlib import Path
@@ -210,12 +210,23 @@ def _replace_demo_scenario_records(
     task_units: list[dict],
     equipment_groups: list[dict],
     spectrum_rules: list[dict],
+    mission: dict,
+    phases: list[dict],
+    links: list[dict],
     audit_log: AuditLog,
 ) -> None:
     try:
+        session.exec(delete(TaskLink).where(TaskLink.project_id == project_id))
+        session.exec(delete(TaskPhase).where(TaskPhase.project_id == project_id))
+        session.exec(delete(MissionTask).where(MissionTask.project_id == project_id))
+        session.add(MissionTask(project_id=project_id, **mission))
+        for phase in phases:
+            session.add(TaskPhase(project_id=project_id, **phase))
         _replace_task_units_without_commit(session, project_id, task_units)
         _replace_equipment_groups_without_commit(session, project_id, equipment_groups)
         _replace_spectrum_rules_without_commit(session, project_id, spectrum_rules)
+        for link in links:
+            session.add(TaskLink(project_id=project_id, **link))
         session.add(audit_log)
         session.commit()
     except Exception:
@@ -230,12 +241,16 @@ def task_scenario_library() -> list[dict]:
 def generate_demo_scenario(session: Session, project_id: int, scenario: str = "baseline") -> dict:
     task_units, equipment_groups, spectrum_rules = demo_scenario_records(scenario)
     scenario_info = next((item for item in TASK_SCENARIOS if item["key"] == scenario), TASK_SCENARIOS[0])
+    mission, phases, links = _demo_context_records(scenario, scenario_info, task_units, equipment_groups)
     _replace_demo_scenario_records(
         session,
         project_id,
         task_units,
         equipment_groups,
         spectrum_rules,
+        mission,
+        phases,
+        links,
         AuditLog(project_id=project_id, action="generate_demo_scenario", detail=f"生成{scenario_info['name']}仿真场景"),
     )
     return {
@@ -244,17 +259,25 @@ def generate_demo_scenario(session: Session, project_id: int, scenario: str = "b
         "equipment_group_count": len(equipment_groups),
         "equipment_sample_count": sum(item["count"] for item in equipment_groups),
         "spectrum_rule_count": len(spectrum_rules),
+        "mission_count": 1,
+        "phase_count": len(phases),
+        "link_count": len(links),
     }
 
 
 def generate_parametric_demo_scenario(session: Session, project_id: int, payload: dict) -> dict:
     task_units, equipment_groups, spectrum_rules = parametric_demo_records(payload)
+    scenario_info = {"key": "parametric", "name": "参数化仿真样例", "description": "按用户参数生成的完整任务筹划样例。"}
+    mission, phases, links = _demo_context_records("parametric", scenario_info, task_units, equipment_groups)
     _replace_demo_scenario_records(
         session,
         project_id,
         task_units,
         equipment_groups,
         spectrum_rules,
+        mission,
+        phases,
+        links,
         AuditLog(
             project_id=project_id,
             action="generate_parametric_demo_scenario",
@@ -270,11 +293,14 @@ def generate_parametric_demo_scenario(session: Session, project_id: int, payload
         ),
     )
     return {
-        "scenario": {"key": "parametric", "name": "参数化仿真样例", "description": "按用户参数生成的任务单元和装备组。"},
+        "scenario": scenario_info,
         "task_unit_count": len(task_units),
         "equipment_group_count": len(equipment_groups),
         "equipment_sample_count": sum(item["count"] for item in equipment_groups),
         "spectrum_rule_count": len(spectrum_rules),
+        "mission_count": 1,
+        "phase_count": len(phases),
+        "link_count": len(links),
         "parameters": _normalized_parametric_payload(payload),
     }
 
@@ -687,6 +713,101 @@ def _save_planning_snapshot(session: Session, project_id: int, run: PlanningRun,
     )
 
 
+def _demo_context_records(
+    scenario_key: str,
+    scenario_info: dict,
+    task_units: list[dict],
+    equipment_groups: list[dict],
+) -> tuple[dict, list[dict], list[dict]]:
+    starts_at = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    ends_at = starts_at + timedelta(hours=24)
+    latitudes = [float(item["area_center_lat"]) for item in task_units if item.get("area_center_lat") is not None]
+    longitudes = [float(item["area_center_lon"]) for item in task_units if item.get("area_center_lon") is not None]
+    center_lat = round(sum(latitudes) / len(latitudes), 6) if latitudes else None
+    center_lon = round(sum(longitudes) / len(longitudes), 6) if longitudes else None
+    region_name = {
+        "sim_mosul_urban": "公开战例仿真-合成城区网格",
+        "sim_kabul_airlift": "公开战例仿真-合成机场保障区",
+        "sim_oir_cuas": "公开战例仿真-合成基地防护区",
+        "sim_red_sea_defense": "公开战例仿真-合成近海协同区",
+        "parametric": "参数化联合任务区域",
+    }.get(scenario_key, "联合演训合成区域")
+    identifier = re.sub(r"[^A-Za-z0-9]+", "-", scenario_key.upper()).strip("-") or "BASELINE"
+    mission = {
+        "mission_id": f"MISSION-{identifier}",
+        "name": f"{scenario_info['name']}用频筹划任务",
+        "mission_type": "演训任务",
+        "description": f"{scenario_info.get('description', '')} 本任务包全部位置、频率和装备参数均为仿真值。",
+        "priority": 8,
+        "required_assurance": 0.9,
+        "starts_at": starts_at,
+        "ends_at": ends_at,
+        "region_name": region_name,
+        "center_lat": center_lat,
+        "center_lon": center_lon,
+        "area_radius_km": max((float(item.get("area_radius_km") or 0) for item in task_units), default=0),
+        "mobility_range_km": 20,
+        "commander_intent": "优先保障指挥、关键链路和高优先级任务，在满足保护约束的前提下降低干扰与频谱占用。",
+        "status": "筹划中",
+    }
+    phase_specs = (
+        ("PHASE-1", "任务展开与网络接入", 0, 4),
+        ("PHASE-2", "高强度任务保障", 4, 18),
+        ("PHASE-3", "收拢与备份保障", 18, 24),
+    )
+    phases = [
+        {
+            "phase_id": phase_id,
+            "name": name,
+            "sequence": index,
+            "starts_at": starts_at + timedelta(hours=start_hour),
+            "ends_at": starts_at + timedelta(hours=end_hour),
+            "status": "待开始",
+            "area_center_lat": center_lat,
+            "area_center_lon": center_lon,
+            "area_radius_km": mission["area_radius_km"],
+            "notes": "仿真任务阶段，可在任务管理中调整。",
+        }
+        for index, (phase_id, name, start_hour, end_hour) in enumerate(phase_specs, 1)
+    ]
+
+    groups_by_unit: dict[str, list[dict]] = defaultdict(list)
+    for group in equipment_groups:
+        groups_by_unit[str(group.get("task_unit_id") or "")].append(group)
+    if not task_units:
+        return mission, phases, []
+    anchor = max(task_units, key=lambda item: (int(item.get("priority") or 0), str(item.get("task_unit_id") or "")))
+    anchor_id = str(anchor.get("task_unit_id") or "")
+    anchor_groups = groups_by_unit.get(anchor_id, [])
+    links = []
+    for index, target in enumerate((item for item in task_units if item.get("task_unit_id") != anchor_id), 1):
+        target_id = str(target.get("task_unit_id") or "")
+        target_groups = groups_by_unit.get(target_id, [])
+        target_group = target_groups[0] if target_groups else {}
+        preferred_bands = [item.strip() for item in str(target.get("preferred_band_groups") or "").split(",") if item.strip()]
+        links.append(
+            {
+                "link_id": f"LINK-{identifier}-{index:02d}",
+                "name": f"{anchor.get('name', anchor_id)}至{target.get('name', target_id)}保障链路",
+                "link_type": "task_coordination",
+                "source_task_unit_id": anchor_id,
+                "target_task_unit_id": target_id,
+                "source_equipment_group_id": anchor_groups[0].get("equipment_group_id") if anchor_groups else None,
+                "target_equipment_group_id": target_group.get("equipment_group_id"),
+                "direction": "bidirectional",
+                "priority": max(int(anchor.get("priority") or 1), int(target.get("priority") or 1)),
+                "required_availability": max(0.5, float(target.get("min_satisfaction_ratio") or 0.9)),
+                "bandwidth_khz": float(target_group.get("bandwidth_khz") or 25),
+                "required_channels": max(1, min(4, int(target_group.get("required_channels") or 1))),
+                "primary_band_group": preferred_bands[0] if preferred_bands else str(target_group.get("preferred_band_group") or ""),
+                "backup_band_group": preferred_bands[1] if len(preferred_bands) > 1 else "",
+                "active_phase_ids": [item["phase_id"] for item in phases],
+                "notes": "由仿真数据预设自动生成，可按实际保障关系调整。",
+            }
+        )
+    return mission, phases, links
+
+
 def _snapshot_rows(session: Session, model: type, project_id: int) -> list[dict]:
     rows = session.exec(select(model).where(model.project_id == project_id).order_by(model.id)).all()
     return [{key: value for key, value in row.model_dump().items() if key not in {"id", "project_id"}} for row in rows]
@@ -733,7 +854,7 @@ def rollback_task_plan(session: Session, project_id: int, source_run_id: int) ->
         for model, key in model_keys:
             session.exec(delete(model).where(model.project_id == project_id))
             for record in payload.get(key, []):
-                session.add(model(project_id=project_id, **record))
+                session.add(model.model_validate({"project_id": project_id, **record}))
         session.add(AuditLog(project_id=project_id, run_id=source_run_id, actor="user", action="task_plan_rollback_restore", detail=f"恢复版本 #{source_run_id} 的完整输入快照"))
         session.commit()
     except Exception:

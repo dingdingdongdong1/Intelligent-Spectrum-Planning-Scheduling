@@ -40,6 +40,18 @@ def test_task_planning_api_end_to_end_acceptance_flow() -> None:
         demo = _assert_ok(client.post(f"/api/projects/{project_id}/generate-task-demo?scenario=large_joint_exercise"))
         assert demo["task_unit_count"] >= 12
         assert demo["equipment_group_count"] >= 40
+        assert demo["mission_count"] == 1
+        assert demo["phase_count"] == 3
+        assert demo["link_count"] == demo["task_unit_count"] - 1
+
+        task_data = _assert_ok(client.get(f"/api/projects/{project_id}/task-data"))
+        assert task_data["mission"]["name"] == "大型联合演训用频筹划任务"
+        assert len(task_data["phases"]) == 3
+        assert all(item["status"] == "待开始" for item in task_data["phases"])
+        assert len(task_data["links"]) == demo["task_unit_count"] - 1
+        task_unit_ids = {item["task_unit_id"] for item in task_data["task_units"]}
+        assert all(item["source_task_unit_id"] in task_unit_ids for item in task_data["links"])
+        assert all(item["target_task_unit_id"] in task_unit_ids for item in task_data["links"])
 
         validation = _assert_ok(client.post(f"/api/projects/{project_id}/validate-task"))
         assert validation["ok"] is True
