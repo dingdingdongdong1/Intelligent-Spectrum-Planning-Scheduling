@@ -485,7 +485,7 @@ export default function TaskPlanningApp() {
 
   async function handleCompare() {
     if (!project) return;
-    const result = await runAction(() => compareTaskPlans(project.id), '多方案对比完成');
+    const result = await runAction(() => compareTaskPlans(project.id, constraintWeights, strategyProfile), '已按当前六维权重完成多方案对比');
     if (result) {
       setComparison(result);
       const selected = result.plans.find((item) => item.recommended) ?? result.plans.find((item) => item.status === 'success');
@@ -585,6 +585,14 @@ export default function TaskPlanningApp() {
       },
     });
     await loadVisualization(project.id, selected.run_id);
+  }
+
+  async function handleAdoptComparisonPlan(selected: TaskComparisonPlan) {
+    if (!project || selected.status !== 'success') return;
+    const adopted = await runAction(() => adoptTaskPlan(project.id, selected.run_id), `已采纳“${selected.label}”方案 #${selected.run_id}`);
+    if (!adopted) return;
+    await selectPlan(selected);
+    await refreshVersions(project.id);
   }
 
   async function handleSelectVersion(run: TaskVersionRun) {
@@ -1243,7 +1251,7 @@ export default function TaskPlanningApp() {
               <section id="dashboard-plan" className="content-grid task-content-grid dashboard-section">
                 <PlanningResultPanel data={visualization} />
                 <ValidationPanel data={validation} />
-                <TaskComparisonPanel data={comparison} projectId={project?.id ?? null} onSelect={selectPlan} />
+                <TaskComparisonPanel data={comparison} projectId={project?.id ?? null} onSelect={selectPlan} onAdopt={handleAdoptComparisonPlan} />
               </section>
             )}
 
@@ -1378,7 +1386,7 @@ export default function TaskPlanningApp() {
 
             {activeModule === 'decision' && (
               <section id="dashboard-decision" className="content-grid task-content-grid dashboard-section dashboard-decision-page">
-                <TaskComparisonPanel data={comparison} projectId={project?.id ?? null} onSelect={selectPlan} />
+                <TaskComparisonPanel data={comparison} projectId={project?.id ?? null} onSelect={selectPlan} onAdopt={handleAdoptComparisonPlan} />
                 <DecisionAssistantPanel
                   project={project}
                   plan={plan}
@@ -2565,10 +2573,12 @@ function TaskComparisonPanel({
   data,
   projectId,
   onSelect,
+  onAdopt,
 }: {
   data: TaskComparisonResult | null;
   projectId: number | null;
   onSelect: (plan: TaskComparisonPlan) => void;
+  onAdopt: (plan: TaskComparisonPlan) => void;
 }) {
   if (!data) {
     return (
@@ -2587,6 +2597,9 @@ function TaskComparisonPanel({
         <BarChart3 size={18} />
         <h2>多方案对比</h2>
       </div>
+      {data.decision_weights && (
+        <p className="objective-help">当前决策权重：保障 {data.decision_weights.task ?? 0} · 风险 {data.decision_weights.risk ?? 0} · 频谱 {data.decision_weights.spectrum ?? 0} · 优先级 {data.decision_weights.priority ?? 0} · 切换 {data.decision_weights.switching ?? 0} · 复用 {data.decision_weights.reuse ?? 0}</p>
+      )}
       <div className="task-plan-grid">
         {data.plans.map((plan) => (
           <article className={`task-plan-card ${plan.recommended ? 'recommended' : ''}`} key={plan.run_id}>
@@ -2605,10 +2618,12 @@ function TaskComparisonPanel({
               <Metric label="占用 MHz" value={plan.used_bandwidth_mhz} />
               <Metric label="高风险" value={plan.high_risk_count} />
               <Metric label="综合分" value={plan.objective_score} />
+              <Metric label="权重得分" value={plan.weighted_score ?? '-'} />
             </div>
             {plan.recommendation_reason && <p className="plan-reason">{plan.recommendation_reason}</p>}
             <div className="plan-actions">
               <button onClick={() => onSelect(plan)}>查看</button>
+              <button className="secondary" onClick={() => onAdopt(plan)}><Save size={14} />采纳</button>
               {projectId && plan.status === 'success' && <a href={url(`/api/projects/${projectId}/task-export.xlsx?run=${plan.run_id}`)}>导出</a>}
             </div>
           </article>

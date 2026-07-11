@@ -36,6 +36,16 @@ def test_plan_adoption_and_rollback_restore_complete_inputs() -> None:
         assert planned.status_code == 200, planned.text
         source_run_id = planned.json()["run_id"]
 
+        comparison = client.post(
+            f"/api/projects/{project_id}/task-compare",
+            json={"objective": "multi_objective", "constraint_weights": {"task": 20, "risk": 100, "spectrum": 60, "priority": 30, "switching": 10, "reuse": 40}, "strategy_profile": "risk_first"},
+        )
+        assert comparison.status_code == 200, comparison.text
+        compared = comparison.json()
+        assert compared["decision_weights"]["risk"] == 100
+        assert compared["recommended_run_id"] == max(compared["plans"], key=lambda item: item.get("weighted_score", 0))["run_id"]
+        assert all(len(item.get("weighted_components", [])) == 6 for item in compared["plans"] if item["status"] == "success")
+
         adopted = client.post(f"/api/projects/{project_id}/task-runs/{source_run_id}/adopt")
         assert adopted.status_code == 200, adopted.text
         assert adopted.json()["adopted"] is True

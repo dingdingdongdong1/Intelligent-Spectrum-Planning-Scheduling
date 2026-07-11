@@ -22,6 +22,7 @@ from backend.app.services.equipment_planning import (
     _supplement_range_for_unmet_assignment,
     _supplement_ranges_for_unmet_assignments,
     _trial_prediction_alignment,
+    _weighted_plan_decision,
     build_task_agent_assessment,
     build_task_strategy_trials,
     build_task_visualization_data,
@@ -116,6 +117,27 @@ def test_task_conflict_model_reports_adjacent_and_guard_shortage() -> None:
     risk_types = {item["risk_type"] for item in risks}
 
     assert {"邻频冲突", "保护间隔不足"} <= risk_types
+
+
+def test_weighted_plan_decision_uses_continuous_six_dimension_weights() -> None:
+    summary = {
+        "task_satisfaction_avg": 92,
+        "quality_scores": {
+            "items": [
+                {"key": "task_assurance", "score": 92},
+                {"key": "interference_risk", "score": 35},
+                {"key": "spectrum_efficiency", "score": 80},
+                {"key": "executability", "score": 90},
+                {"key": "change_cost", "score": 70},
+            ]
+        },
+    }
+    assurance_first = _weighted_plan_decision(summary, {"task": 100, "risk": 5, "spectrum": 5, "priority": 5, "switching": 5, "reuse": 5})
+    risk_first = _weighted_plan_decision(summary, {"task": 5, "risk": 100, "spectrum": 5, "priority": 5, "switching": 5, "reuse": 5})
+
+    assert assurance_first["score"] > risk_first["score"]
+    assert len(assurance_first["components"]) == 6
+    assert next(item for item in assurance_first["components"] if item["key"] == "task")["contribution"] > 70
 
 
 def test_all_task_objectives_are_supported() -> None:

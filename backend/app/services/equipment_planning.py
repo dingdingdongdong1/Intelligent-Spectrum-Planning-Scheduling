@@ -1522,7 +1522,8 @@ def replan_task_project(session: Session, project_id: int, payload: dict) -> dic
     return {"reply": explanation, "run_id": run.id, "summary": summary, "replan_effect": replan_effect}
 
 
-def compare_task_plans(session: Session, project_id: int) -> dict:
+def compare_task_plans(session: Session, project_id: int, decision_weights: dict | None = None) -> dict:
+    decision_weights = _normalize_constraint_weights(decision_weights or {})
     plans = []
     for item in TASK_OBJECTIVES:
         run = run_task_planning(session, project_id, item["objective"])
@@ -1547,17 +1548,50 @@ def compare_task_plans(session: Session, project_id: int) -> dict:
                 "recommendation_reason": _recommendation_reason(summary, item["label"]),
                 "recommended": False,
                 "elapsed_ms": run.elapsed_ms,
+                "_summary": summary,
             }
         )
     successful = [item for item in plans if item["status"] == "success"]
-    recommended = min(successful, key=lambda item: item["objective_score"], default=None)
+    for plan in successful:
+        weighted = _weighted_plan_decision(plan["_summary"], decision_weights)
+        plan["weighted_score"] = weighted["score"]
+        plan["weighted_components"] = weighted["components"]
+    recommended = max(successful, key=lambda item: item.get("weighted_score", 0), default=None)
     if recommended:
         recommended["recommended"] = True
+        recommended["recommendation_reason"] = f"按当前六维权重综合得分 {recommended['weighted_score']}，在保障、风险、频谱、优先级、切换和复用之间最匹配。"
+    for plan in plans:
+        plan.pop("_summary", None)
     return {
         "plans": plans,
         "recommended_run_id": recommended["run_id"] if recommended else None,
         "objectives": TASK_OBJECTIVES,
         "decision_table": _decision_table_from_plans(plans),
+        "decision_weights": decision_weights,
+    }
+
+
+def _weighted_plan_decision(summary: dict, weights: dict) -> dict:
+    quality_items = {
+        item.get("key"): float(item.get("score") or 0)
+        for item in (summary.get("quality_scores") or {}).get("items", [])
+    }
+    components = {
+        "task": quality_items.get("task_assurance", float(summary.get("task_satisfaction_avg") or 0)),
+        "risk": quality_items.get("interference_risk", 0.0),
+        "spectrum": quality_items.get("spectrum_efficiency", 0.0),
+        "priority": quality_items.get("executability", 0.0),
+        "switching": quality_items.get("change_cost", 100.0),
+        "reuse": round((quality_items.get("spectrum_efficiency", 0.0) + quality_items.get("interference_risk", 0.0)) / 2, 2),
+    }
+    total_weight = sum(max(0.0, float(weights.get(key) or 0)) for key in components) or 1.0
+    score = sum(components[key] * max(0.0, float(weights.get(key) or 0)) for key in components) / total_weight
+    return {
+        "score": round(score, 2),
+        "components": [
+            {"key": key, "score": round(value, 2), "weight": float(weights.get(key) or 0), "contribution": round(value * float(weights.get(key) or 0) / total_weight, 2)}
+            for key, value in components.items()
+        ],
     }
 
 
@@ -6566,7 +6600,7 @@ def _recommendation_reason(summary: dict, label: str) -> str:
 
 def _decision_table_from_plans(plans: list[dict]) -> list[dict]:
     profiles = [
-        ("recommended", "综合推荐", None, "默认提交人工审核", "综合分最低，适合作为主方案"),
+        ("recommended", "综合推荐", None, "默认提交人工审核", "六维权重得分最高，适合作为主方案"),
         ("conservative", "保守低风险", "minimize_interference", "保护频率和复用距离敏感任务", "可能占用更多频谱或降低复用效率"),
         ("reuse", "激进复用", "maximize_reuse_efficiency", "频谱紧张但允许工程复核的任务", "复用链路和邻频风险需要重点复核"),
         ("radar", "雷达优先", "radar_priority", "雷达探测窗口必须优先保障", "通信或回传装备可能被降级"),
@@ -6574,7 +6608,7 @@ def _decision_table_from_plans(plans: list[dict]) -> list[dict]:
         ("minimum_change", "最小改动", "minimize_switching", "已有规划只需局部调整", "不一定获得最低干扰或最高频谱效率"),
     ]
     successful = [plan for plan in plans if plan.get("status") == "success"]
-    recommended = min(successful, key=lambda item: float(item.get("objective_score") or 0), default=None)
+    recommended = next((item for item in successful if item.get("recommended")), None) or max(successful, key=lambda item: float(item.get("weighted_score") or 0), default=None)
     rows = []
     for key, profile_name, objective, use_case, tradeoff in profiles:
         if objective:
@@ -6585,13 +6619,18 @@ def _decision_table_from_plans(plans: list[dict]) -> list[dict]:
             continue
         rows.append(
             {
-                "profile": key,
+                "profile": profile_name,
+                "profile_key": key,
                 "profile_name": profile_name,
+                "plan_label": plan.get("label"),
                 "run_id": plan.get("run_id"),
                 "objective": plan.get("objective"),
                 "objective_label": plan.get("label"),
                 "use_case": use_case,
+                "suitable_when": use_case,
                 "tradeoff": tradeoff,
+                "main_gain": f"保障 {plan.get('task_satisfaction_avg', 0)}%，高风险 {plan.get('high_risk_count', 0)}，占频 {plan.get('used_bandwidth_mhz', 0)} MHz",
+                "risk": plan.get("recommendation_reason") or tradeoff,
                 "task_satisfaction_avg": plan.get("task_satisfaction_avg", 0),
                 "full_group_count": plan.get("full_group_count", 0),
                 "partial_group_count": plan.get("partial_group_count", 0),

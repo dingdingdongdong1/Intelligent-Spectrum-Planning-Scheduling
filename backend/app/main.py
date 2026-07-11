@@ -755,7 +755,7 @@ def task_plan_project(project_id: int, payload: PlanRequest, session: Session = 
 
 
 @app.post("/api/projects/{project_id}/task-compare")
-def task_compare_project(project_id: int, session: Session = Depends(get_session)) -> dict:
+def task_compare_project(project_id: int, payload: PlanRequest | None = None, session: Session = Depends(get_session)) -> dict:
     _require_project(session, project_id)
     validation = validate_task_inputs(
         db_task_units_to_dicts(session, project_id),
@@ -764,7 +764,7 @@ def task_compare_project(project_id: int, session: Session = Depends(get_session
     )
     if not validation["ok"]:
         raise HTTPException(status_code=422, detail=validation)
-    result = compare_task_plans(session, project_id)
+    result = compare_task_plans(session, project_id, (payload.constraint_weights if payload else {}))
     session.add(AuditLog(project_id=project_id, action="task_compare", detail=json.dumps(result.get("recommended_run_id"), ensure_ascii=False)))
     session.commit()
     return result

@@ -379,6 +379,8 @@ export type TaskComparisonPlan = {
   risk_item_count: number;
   high_risk_count: number;
   objective_score: number;
+  weighted_score?: number;
+  weighted_components?: Array<{ key: string; score: number; weight: number; contribution: number }>;
   score_explanation?: ScoreExplanation;
   recommendation_reason?: string;
   recommended: boolean;
@@ -400,6 +402,7 @@ export type TaskComparisonResult = {
   recommended_run_id: number | null;
   objectives: TaskObjective[];
   decision_table?: TaskDecisionRow[];
+  decision_weights?: Partial<ConstraintWeights>;
 };
 
 export type TaskUnitView = {
@@ -1568,8 +1571,12 @@ export async function planTaskProject(
   });
 }
 
-export async function compareTaskPlans(projectId: number): Promise<TaskComparisonResult> {
-  return request<TaskComparisonResult>(`/api/projects/${projectId}/task-compare`, { method: 'POST' });
+export async function compareTaskPlans(projectId: number, constraintWeights: Partial<ConstraintWeights> = {}, strategyProfile = 'balanced'): Promise<TaskComparisonResult> {
+  return request<TaskComparisonResult>(`/api/projects/${projectId}/task-compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ objective: 'multi_objective', constraint_weights: constraintWeights, strategy_profile: strategyProfile }),
+  });
 }
 
 export async function getTaskVisualization(projectId: number, runId: number): Promise<TaskVisualizationData> {
