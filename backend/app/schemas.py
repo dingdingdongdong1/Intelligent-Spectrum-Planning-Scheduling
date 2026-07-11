@@ -153,6 +153,38 @@ class SatisfactionUpdatePayload(BaseModel):
     min_satisfaction_ratio: float
 
 
+class EquipmentEventPayload(BaseModel):
+    action: str
+    equipment_group_id: str
+    template_group_id: str | None = None
+    task_unit_id: str | None = None
+    equipment_type: str | None = None
+    count: int = Field(default=1, ge=1)
+    reason: str = "动态装备事件"
+
+
+class UnitPositionUpdatePayload(BaseModel):
+    task_unit_id: str
+    area_center_lat: float = Field(ge=-90, le=90)
+    area_center_lon: float = Field(ge=-180, le=180)
+    area_radius_km: float = Field(default=0, ge=0)
+    reason: str = "任务单元机动"
+
+
+class InterferenceSourceEventPayload(BaseModel):
+    source_id: str
+    start_mhz: float = Field(ge=0)
+    end_mhz: float = Field(gt=0)
+    max_power_w: float = Field(default=1, ge=0)
+    center_lat: float | None = Field(default=None, ge=-90, le=90)
+    center_lon: float | None = Field(default=None, ge=-180, le=180)
+    coverage_radius_km: float = Field(default=0, ge=0)
+    region: str = "全域"
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    reason: str = "新增动态干扰源"
+
+
 class TaskReplanRequest(BaseModel):
     message: str = ""
     objective: str = "task_assurance"
@@ -164,6 +196,9 @@ class TaskReplanRequest(BaseModel):
     forbidden_ranges: list[FrequencyRangePayload] = Field(default_factory=list)
     priority_updates: list[PriorityUpdatePayload] = Field(default_factory=list)
     satisfaction_updates: list[SatisfactionUpdatePayload] = Field(default_factory=list)
+    equipment_events: list[EquipmentEventPayload] = Field(default_factory=list)
+    unit_position_updates: list[UnitPositionUpdatePayload] = Field(default_factory=list)
+    interference_sources: list[InterferenceSourceEventPayload] = Field(default_factory=list)
     avoid_band_groups: list[str] = Field(default_factory=list)
     forced_band_groups: dict[str, str] = Field(default_factory=dict)
     required_full_targets: list[str] = Field(default_factory=list)

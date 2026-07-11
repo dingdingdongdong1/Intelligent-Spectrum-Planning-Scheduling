@@ -711,6 +711,9 @@ export type TaskReplanPayload = {
   forbidden_ranges: Array<{ band_group?: string; start_mhz: number; end_mhz: number; reason?: string }>;
   priority_updates: Array<{ target: string; priority: number }>;
   satisfaction_updates: Array<{ task_unit_id: string; min_satisfaction_ratio: number }>;
+  equipment_events?: Array<{ action: '损毁' | '新增'; equipment_group_id: string; template_group_id?: string; task_unit_id?: string; equipment_type?: string; count: number; reason?: string }>;
+  unit_position_updates?: Array<{ task_unit_id: string; area_center_lat: number; area_center_lon: number; area_radius_km: number; reason?: string }>;
+  interference_sources?: Array<{ source_id: string; start_mhz: number; end_mhz: number; max_power_w: number; center_lat?: number | null; center_lon?: number | null; coverage_radius_km?: number; region?: string; starts_at?: string | null; ends_at?: string | null; reason?: string }>;
   avoid_band_groups: string[];
   locked_task_unit_ids?: string[];
   forced_band_groups?: Record<string, string>;

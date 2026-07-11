@@ -43,27 +43,27 @@ def test_plan_adoption_and_rollback_restore_complete_inputs() -> None:
         original = client.get(f"/api/projects/{project_id}/task-data").json()
         original_group_ids = {item["equipment_group_id"] for item in original["equipment_groups"]}
         deleted = original["equipment_groups"][0]
-        assert client.delete(f"/api/projects/{project_id}/equipment-groups/{deleted['id']}").status_code == 200
-
-        jammer = {
-            "resource_id": "ROLLBACK-JAMMER",
-            "name": "回滚测试干扰源",
-            "resource_type": "干扰源",
-            "purpose": "动态事件",
-            "region": "全域",
-            "start_mhz": 410,
-            "end_mhz": 411,
-            "channel_step_khz": 25,
-            "max_bandwidth_khz": 100,
-            "max_power_w": 500,
-            "guard_band_khz": 25,
-            "coverage_radius_km": 20,
-            "status": "启用",
+        moved_unit = original["task_units"][0]
+        event_payload = {
+            "message": "装备损毁、单元机动并发现新干扰源",
+            "objective": "minimize_interference",
+            "base_run_id": source_run_id,
+            "equipment_events": [{"action": "损毁", "equipment_group_id": deleted["equipment_group_id"], "count": deleted["count"], "reason": "战损"}],
+            "unit_position_updates": [{"task_unit_id": moved_unit["task_unit_id"], "area_center_lat": 35.1, "area_center_lon": 115.2, "area_radius_km": 30, "reason": "向东机动"}],
+            "interference_sources": [{"source_id": "ROLLBACK-JAMMER", "start_mhz": 410, "end_mhz": 411, "max_power_w": 500, "coverage_radius_km": 20, "region": "全域", "reason": "新发现干扰源"}],
         }
-        assert client.post(f"/api/projects/{project_id}/spectrum-resources", json=jammer).status_code == 200
+        preview = client.post(f"/api/projects/{project_id}/task-replan-preview", json=event_payload)
+        assert preview.status_code == 200, preview.text
+        change_types = {item["type"] for item in preview.json()["change_items"]}
+        assert {"装备损毁", "机动区域变化", "新增干扰源"} <= change_types
+
+        replanned = client.post(f"/api/projects/{project_id}/task-replan", json=event_payload)
+        assert replanned.status_code == 200, replanned.text
         changed = client.get(f"/api/projects/{project_id}/task-data").json()
         assert deleted["equipment_group_id"] not in {item["equipment_group_id"] for item in changed["equipment_groups"]}
-        assert client.get(f"/api/projects/{project_id}/spectrum-resources").json()
+        changed_unit = next(item for item in changed["task_units"] if item["task_unit_id"] == moved_unit["task_unit_id"])
+        assert (changed_unit["area_center_lat"], changed_unit["area_center_lon"], changed_unit["area_radius_km"]) == (35.1, 115.2, 30)
+        assert client.get(f"/api/projects/{project_id}/spectrum-resources").json()[0]["resource_type"] == "干扰源"
 
         rolled_back = client.post(f"/api/projects/{project_id}/task-runs/{source_run_id}/rollback")
         assert rolled_back.status_code == 200, rolled_back.text
@@ -73,6 +73,8 @@ def test_plan_adoption_and_rollback_restore_complete_inputs() -> None:
         restored = client.get(f"/api/projects/{project_id}/task-data").json()
         assert {item["equipment_group_id"] for item in restored["equipment_groups"]} == original_group_ids
         assert client.get(f"/api/projects/{project_id}/spectrum-resources").json() == []
+        restored_unit = next(item for item in restored["task_units"] if item["task_unit_id"] == moved_unit["task_unit_id"])
+        assert restored_unit["area_center_lat"] == moved_unit["area_center_lat"]
 
         versions = client.get(f"/api/projects/{project_id}/task-versions").json()["runs"]
         restored_version = next(item for item in versions if item["run_id"] == restored_run_id)

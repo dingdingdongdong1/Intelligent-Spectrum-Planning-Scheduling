@@ -98,6 +98,7 @@ import TaskWorkbench from './TaskWorkbench';
 import SpectrumResourcePanel from './SpectrumResourcePanel';
 import { InterferenceAnalysisPanel } from './InterferenceAnalysisPanel';
 import { PlanningResultPanel } from './PlanningResultPanel';
+import { DynamicEventPanel, DynamicEvents } from './DynamicEventPanel';
 type Notice = {
   type: 'info' | 'error' | 'success';
   text: string;
@@ -217,6 +218,7 @@ export default function TaskPlanningApp() {
   const [forcedBand, setForcedBand] = useState('');
   const [requiredFullTarget, setRequiredFullTarget] = useState('');
   const [allowLowPriorityDegrade, setAllowLowPriorityDegrade] = useState(true);
+  const [dynamicEvents, setDynamicEvents] = useState<DynamicEvents>({ equipment_events: [], unit_position_updates: [], interference_sources: [] });
   const [suggestedPayloadOverride, setSuggestedPayloadOverride] = useState<Partial<TaskReplanPayload> | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
@@ -291,6 +293,7 @@ export default function TaskPlanningApp() {
     setAvailableBand('');
     setAvailableStart('');
     setAvailableEnd('');
+    setDynamicEvents({ equipment_events: [], unit_position_updates: [], interference_sources: [] });
   }
 
   async function loadVisualization(projectId: number, runId: number) {
@@ -886,6 +889,9 @@ export default function TaskPlanningApp() {
       forbidden_ranges: forbidden,
       priority_updates,
       satisfaction_updates,
+      equipment_events: dynamicEvents.equipment_events,
+      unit_position_updates: dynamicEvents.unit_position_updates,
+      interference_sources: dynamicEvents.interference_sources,
       avoid_band_groups: avoidBand ? [avoidBand] : [],
       forced_band_groups: forcedTarget.trim() && forcedBand ? { [forcedTarget.trim()]: forcedBand } : {},
       required_full_targets: splitList(requiredFullTarget),
@@ -906,6 +912,9 @@ export default function TaskPlanningApp() {
       forbidden_ranges: overrides.forbidden_ranges ?? basePayload.forbidden_ranges,
       priority_updates: overrides.priority_updates ?? basePayload.priority_updates,
       satisfaction_updates: overrides.satisfaction_updates ?? basePayload.satisfaction_updates,
+      equipment_events: overrides.equipment_events ?? basePayload.equipment_events,
+      unit_position_updates: overrides.unit_position_updates ?? basePayload.unit_position_updates,
+      interference_sources: overrides.interference_sources ?? basePayload.interference_sources,
       avoid_band_groups: overrides.avoid_band_groups ?? basePayload.avoid_band_groups,
       forced_band_groups: overrides.forced_band_groups ?? basePayload.forced_band_groups,
       required_full_targets: overrides.required_full_targets ?? basePayload.required_full_targets,
@@ -1265,6 +1274,7 @@ export default function TaskPlanningApp() {
 
             {activeModule === 'replan' && (
               <section id="dashboard-replan" className="content-grid task-content-grid dashboard-section">
+                <DynamicEventPanel value={dynamicEvents} onChange={(value) => { setDynamicEvents(value); resetReplanPreview(); }} busy={busy} />
                 <ReplanPanel
                   busy={busy}
                   projectReady={Boolean(project)}

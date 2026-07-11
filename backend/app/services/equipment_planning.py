@@ -507,6 +507,12 @@ def _replan_change_items(changes: dict) -> list[dict]:
         items.append({"type": "调整优先级", "target": item.get("target", ""), "detail": f"设为 {item.get('priority')}"})
     for item in changes.get("satisfaction_updates", []):
         items.append({"type": "调整最低保障率", "target": item.get("task_unit_id", ""), "detail": f"{float(item.get('min_satisfaction_ratio') or 0) * 100:.0f}%"})
+    for item in changes.get("equipment_events", []):
+        items.append({"type": f"装备{item.get('action', '变更')}", "target": item.get("equipment_group_id", ""), "detail": f"数量 {item.get('count', 1)}；{item.get('reason', '')}"})
+    for item in changes.get("unit_position_updates", []):
+        items.append({"type": "机动区域变化", "target": item.get("task_unit_id", ""), "detail": f"({item.get('area_center_lat')}, {item.get('area_center_lon')}) / 半径 {item.get('area_radius_km', 0)} km"})
+    for item in changes.get("interference_sources", []):
+        items.append({"type": "新增干扰源", "target": item.get("source_id", ""), "detail": f"{item.get('start_mhz')}-{item.get('end_mhz')} MHz / {item.get('max_power_w', 0)} W"})
     for group_id in changes.get("locked_equipment_group_ids", []):
         items.append({"type": "锁定装备组", "target": group_id, "detail": "保持上一版指配资源"})
     for unit_id in changes.get("locked_task_unit_ids", []):
@@ -1477,6 +1483,7 @@ def replan_task_project(session: Session, project_id: int, payload: dict) -> dic
         "allow_low_priority_degrade": changes["allow_low_priority_degrade"],
         "weights": changes["constraint_weights"],
         "strategy_profile": changes["strategy_profile"],
+        "base_run_id": changes.get("base_run_id"),
     }
     run = run_task_planning(session, project_id, changes["objective"], constraints=constraints)
     summary = json.loads(run.summary_json or "{}")
@@ -1491,6 +1498,10 @@ def replan_task_project(session: Session, project_id: int, payload: dict) -> dic
                     "message": payload.get("message", ""),
                     "applied": applied,
                     "available_ranges": changes["available_ranges"],
+                    "forbidden_ranges": changes["forbidden_ranges"],
+                    "equipment_events": changes.get("equipment_events", []),
+                    "unit_position_updates": changes.get("unit_position_updates", []),
+                    "interference_sources": changes.get("interference_sources", []),
                     "locked_equipment_group_ids": changes["locked_equipment_group_ids"],
                     "avoid_band_groups": changes["avoid_band_groups"],
                     "forced_band_groups": changes["forced_band_groups"],
@@ -2072,6 +2083,49 @@ def _apply_replan_changes_to_records(
             if _target_matches(target, unit.get("task_unit_id"), unit.get("name"), unit.get("unit_type")):
                 unit["min_satisfaction_ratio"] = ratio
                 break
+    for update in changes.get("unit_position_updates", []):
+        target = str(update.get("task_unit_id") or "").strip()
+        for unit in units:
+            if unit.get("task_unit_id") == target:
+                unit["area_center_lat"] = float(update.get("area_center_lat"))
+                unit["area_center_lon"] = float(update.get("area_center_lon"))
+                unit["area_radius_km"] = max(0.0, float(update.get("area_radius_km") or 0))
+                break
+    for event in changes.get("equipment_events", []):
+        action = str(event.get("action") or "").strip()
+        group_id = str(event.get("equipment_group_id") or "").strip()
+        count = max(1, int(event.get("count") or 1))
+        if action == "损毁":
+            for group in list(groups):
+                if group.get("equipment_group_id") == group_id:
+                    group["count"] = max(0, int(group.get("count") or 0) - count)
+                    if group["count"] <= 0:
+                        groups.remove(group)
+                    break
+        elif action == "新增" and group_id and not any(item.get("equipment_group_id") == group_id for item in groups):
+            template_id = str(event.get("template_group_id") or "").strip()
+            template = next((dict(item) for item in groups if item.get("equipment_group_id") == template_id), {})
+            template.update(
+                {
+                    "equipment_group_id": group_id,
+                    "task_unit_id": event.get("task_unit_id") or template.get("task_unit_id") or "",
+                    "equipment_type": event.get("equipment_type") or template.get("equipment_type") or "新增装备",
+                    "count": count,
+                }
+            )
+            template.pop("id", None)
+            template.pop("project_id", None)
+            groups.append(template)
+    for idx, source in enumerate(changes.get("interference_sources", [])):
+        rule = _trial_range_rule(
+            {"start_mhz": source.get("start_mhz"), "end_mhz": source.get("end_mhz"), "reason": source.get("reason") or "动态干扰源"},
+            rules,
+            idx + len(changes.get("forbidden_ranges", [])),
+            available=False,
+        )
+        if rule:
+            rule["rule_id"] = f"JAMMER-TRIAL-{source.get('source_id', idx)}"
+            rules.append(rule)
     return units, groups, rules
 
 
@@ -2136,6 +2190,9 @@ def _trial_apply_payload(profile: dict, changes: dict, base_run_id: int | None, 
         "forbidden_ranges": changes.get("forbidden_ranges", []),
         "priority_updates": changes.get("priority_updates", []),
         "satisfaction_updates": changes.get("satisfaction_updates", []),
+        "equipment_events": changes.get("equipment_events", []),
+        "unit_position_updates": changes.get("unit_position_updates", []),
+        "interference_sources": changes.get("interference_sources", []),
         "avoid_band_groups": changes.get("avoid_band_groups", []),
         "forced_band_groups": changes.get("forced_band_groups", {}),
         "required_full_targets": changes.get("required_full_targets", []),
@@ -5686,6 +5743,9 @@ def _parse_replan_changes(session: Session, project_id: int, payload: dict) -> d
         "forbidden_ranges": [dict(item) for item in payload.get("forbidden_ranges", [])],
         "priority_updates": [dict(item) for item in payload.get("priority_updates", [])],
         "satisfaction_updates": [dict(item) for item in payload.get("satisfaction_updates", [])],
+        "equipment_events": [dict(item) for item in payload.get("equipment_events", [])],
+        "unit_position_updates": [dict(item) for item in payload.get("unit_position_updates", [])],
+        "interference_sources": [dict(item) for item in payload.get("interference_sources", [])],
         "locked_equipment_group_ids": list(payload.get("locked_equipment_group_ids", []) or []),
         "locked_task_unit_ids": list(payload.get("locked_task_unit_ids", []) or []),
         "avoid_band_groups": list(payload.get("avoid_band_groups", []) or []),
@@ -5796,6 +5856,9 @@ def _apply_replan_changes(session: Session, project_id: int, changes: dict) -> d
         "forbidden_range_count": 0,
         "priority_update_count": 0,
         "satisfaction_update_count": 0,
+        "equipment_event_count": 0,
+        "position_update_count": 0,
+        "interference_source_count": 0,
     }
     rules = planning_spectrum_rules(session, project_id)
     for idx, item in enumerate(changes["available_ranges"]):
@@ -5888,6 +5951,92 @@ def _apply_replan_changes(session: Session, project_id: int, changes: dict) -> d
                 session.add(unit)
                 applied["satisfaction_update_count"] += 1
                 break
+
+    for update in changes.get("unit_position_updates", []):
+        target = str(update.get("task_unit_id") or "").strip()
+        unit = next((item for item in units if item.task_unit_id == target), None)
+        if unit is None:
+            continue
+        unit.area_center_lat = float(update.get("area_center_lat"))
+        unit.area_center_lon = float(update.get("area_center_lon"))
+        unit.area_radius_km = max(0.0, float(update.get("area_radius_km") or 0))
+        unit.raw_json = _refresh_raw(unit)
+        session.add(unit)
+        applied["position_update_count"] += 1
+
+    for event in changes.get("equipment_events", []):
+        action = str(event.get("action") or "").strip()
+        group_id = str(event.get("equipment_group_id") or "").strip()
+        count = max(1, int(event.get("count") or 1))
+        existing = next((item for item in groups if item.equipment_group_id == group_id), None)
+        if action == "损毁" and existing is not None:
+            remaining = max(0, int(existing.count or 0) - count)
+            if remaining == 0:
+                session.delete(existing)
+            else:
+                existing.count = remaining
+                existing.raw_json = _refresh_raw(existing)
+                session.add(existing)
+            applied["equipment_event_count"] += 1
+        elif action == "新增" and existing is None and group_id:
+            template_id = str(event.get("template_group_id") or "").strip()
+            template = next((item for item in groups if item.equipment_group_id == template_id), None)
+            data = {
+                key: value
+                for key, value in (template.model_dump() if template else {}).items()
+                if key not in {"id", "project_id", "equipment_group_id", "task_unit_id", "equipment_type", "count", "raw_json"}
+            }
+            record = EquipmentGroup(
+                project_id=project_id,
+                equipment_group_id=group_id,
+                task_unit_id=str(event.get("task_unit_id") or (template.task_unit_id if template else "")),
+                equipment_type=str(event.get("equipment_type") or (template.equipment_type if template else "新增装备")),
+                count=count,
+                raw_json="{}",
+                **data,
+            )
+            record.raw_json = _refresh_raw(record)
+            session.add(record)
+            applied["equipment_event_count"] += 1
+
+    for source in changes.get("interference_sources", []):
+        start = float(source.get("start_mhz") or 0)
+        end = float(source.get("end_mhz") or 0)
+        source_id = str(source.get("source_id") or "").strip()
+        if not source_id or end <= start:
+            continue
+        resource_id = f"JAMMER-{source_id}"
+        existing_resource = session.exec(
+            select(SpectrumResource).where(SpectrumResource.project_id == project_id, SpectrumResource.resource_id == resource_id)
+        ).first()
+        data = {
+            "name": source.get("reason") or source_id,
+            "resource_type": "干扰源",
+            "purpose": "动态重筹干扰事件",
+            "region": source.get("region") or "全域",
+            "start_mhz": start,
+            "end_mhz": end,
+            "channel_step_khz": 25,
+            "max_bandwidth_khz": max(1.0, (end - start) * 1000),
+            "max_power_w": float(source.get("max_power_w") or 0),
+            "guard_band_khz": 0,
+            "center_lat": source.get("center_lat"),
+            "center_lon": source.get("center_lon"),
+            "coverage_radius_km": float(source.get("coverage_radius_km") or 0),
+            "starts_at": source.get("starts_at"),
+            "ends_at": source.get("ends_at"),
+            "compatible_equipment_types": "",
+            "status": "启用",
+            "source": "DYNAMIC_REPLAN",
+            "notes": source.get("reason") or "新增动态干扰源",
+        }
+        if existing_resource:
+            for key, value in data.items():
+                setattr(existing_resource, key, value)
+            session.add(existing_resource)
+        else:
+            session.add(SpectrumResource(project_id=project_id, resource_id=resource_id, **data))
+        applied["interference_source_count"] += 1
 
     if any(applied.values()):
         _touch_project(session, project_id, "task_constraints_updated")
@@ -6931,7 +7080,9 @@ def _audit_checklist(summary: dict, assignments: list[dict]) -> list[str]:
 def _replan_explanation(applied: dict, changes: dict, summary: dict) -> str:
     parts = [
         f"已按“{_objective_label(changes['objective'])}”重新规划。",
-        f"新增可用频段 {applied.get('available_range_count', 0)} 条，新增禁用频段 {applied['forbidden_range_count']} 条，调整优先级 {applied['priority_update_count']} 项，调整保障率 {applied['satisfaction_update_count']} 项。",
+        f"新增可用频段 {applied.get('available_range_count', 0)} 条，新增禁用频段 {applied['forbidden_range_count']} 条，"
+        f"装备事件 {applied.get('equipment_event_count', 0)} 项，机动位置 {applied.get('position_update_count', 0)} 项，"
+        f"干扰源 {applied.get('interference_source_count', 0)} 项，调整优先级 {applied['priority_update_count']} 项，调整保障率 {applied['satisfaction_update_count']} 项。",
     ]
     if changes["locked_equipment_group_ids"]:
         parts.append(f"锁定装备组：{', '.join(changes['locked_equipment_group_ids'])}。")
