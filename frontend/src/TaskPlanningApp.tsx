@@ -97,6 +97,7 @@ import {
   validateTaskProject,
   adoptTaskPlan,
   rollbackTaskPlan,
+  renameProject,
 } from './api';
 import TaskWorkbench from './TaskWorkbench';
 import SpectrumResourcePanel from './SpectrumResourcePanel';
@@ -171,7 +172,9 @@ const dashboardModuleTitles: Record<DashboardModuleKey, string> = {
 };
 
 export default function TaskPlanningApp() {
-  const [projectName, setProjectName] = useState('战场联合任务用频筹划');
+  const [projectName, setProjectName] = useState(() => suggestedProjectName('高密度联合作战基线'));
+  const [projectRenameName, setProjectRenameName] = useState('');
+  const [showAllProjects, setShowAllProjects] = useState(false);
   const [project, setProject] = useState<Project | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [taskDataSummary, setTaskDataSummary] = useState({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0, phases: 0, links: 0 });
@@ -362,7 +365,8 @@ export default function TaskPlanningApp() {
   async function openProject(selected: Project, announce = true) {
     setBusy(true);
     setNotice(null);
-    setProject(selected);
+      setProject(selected);
+      setProjectRenameName(selected.name);
     setProjectName(selected.name);
     clearPlanningState();
     window.localStorage.setItem('spectrum-planning-project-id', String(selected.id));
@@ -414,6 +418,7 @@ export default function TaskPlanningApp() {
     const created = await runAction(() => createProject(name), '项目已创建');
     if (created) {
       setProject(created);
+      setProjectRenameName(created.name);
       setProjects((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       clearPlanningState();
       setSpectrumRules([]);
@@ -421,6 +426,20 @@ export default function TaskPlanningApp() {
       setTaskDataSummary({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0, phases: 0, links: 0 });
       window.localStorage.setItem('spectrum-planning-project-id', String(created.id));
     }
+  }
+
+  async function handleRenameProject() {
+    if (!project) return;
+    const name = projectRenameName.trim();
+    if (name.length < 2) {
+      setNotice({ type: 'error', text: '项目名称至少需要 2 个字符' });
+      return;
+    }
+    const renamed = await runAction(() => renameProject(project.id, name), '项目名称已更新');
+    if (!renamed) return;
+    setProject(renamed);
+    setProjects((current) => current.map((item) => (item.id === renamed.id ? renamed : item)));
+    setProjectRenameName(renamed.name);
   }
 
   async function handleGenerateDemo() {
@@ -961,6 +980,12 @@ export default function TaskPlanningApp() {
     numberValue(validation?.summary.task_unit_count),
   );
   const pageTopBands = [...(visualization?.band_usage ?? [])].sort((left, right) => right.utilization_pct - left.utilization_pct).slice(0, 4);
+  const visibleProjects = useMemo(() => {
+    if (showAllProjects) return projects;
+    const recent = projects.slice(0, 12);
+    if (!project || recent.some((item) => item.id === project.id)) return recent;
+    return [project, ...recent.slice(0, 11)];
+  }, [project, projects, showAllProjects]);
 
   return (
     <main className="shell task-shell dashboard-shell">
@@ -992,6 +1017,8 @@ export default function TaskPlanningApp() {
             {activeModule === 'overview' && (
               <TaskDashboardOverview
                 project={project}
+                mission={taskMission}
+                dataSummary={taskDataSummary}
                 validation={validation}
                 plan={plan}
                 visualization={visualization}
@@ -1004,6 +1031,7 @@ export default function TaskPlanningApp() {
                 onPlan={handlePlan}
                 onCompare={handleCompare}
                 onRunBatch={handleBatchPerformanceTest}
+                onOpenTasks={() => setActiveModule('tasks')}
               />
             )}
 
@@ -1020,6 +1048,17 @@ export default function TaskPlanningApp() {
             <WandSparkles size={18} />
             <h2>项目与仿真数据</h2>
           </div>
+          <div className="project-name-head">
+            <label htmlFor="project-name">新建项目名称</label>
+            <button
+              type="button"
+              className="naming-suggestion"
+              onClick={() => setProjectName(suggestedProjectName(scenarioProjectBaseName(scenarios.find((item) => item.key === scenario))))}
+            >
+              <WandSparkles size={14} />
+              按当前场景命名
+            </button>
+          </div>
           <div className="row">
             <input
               id="project-name"
@@ -1033,6 +1072,7 @@ export default function TaskPlanningApp() {
               创建
             </button>
           </div>
+          <p className="project-naming-help">命名规则：任务场景或区域 - 筹划主题 - 日期</p>
           <div className="project-switcher">
             <label htmlFor="existing-project">已有项目</label>
             <div className="project-switcher-row">
@@ -1047,9 +1087,9 @@ export default function TaskPlanningApp() {
                 disabled={busy || projects.length === 0}
               >
                 <option value="">{projects.length ? '选择项目' : '暂无已有项目'}</option>
-                {projects.map((item) => (
+                {visibleProjects.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.name}
+                    {projectOptionLabel(item)}
                   </option>
                 ))}
               </select>
@@ -1057,28 +1097,42 @@ export default function TaskPlanningApp() {
                 <RefreshCw size={16} />
               </button>
             </div>
+            {projects.length > 12 && (
+              <button type="button" className="project-list-toggle" onClick={() => setShowAllProjects((current) => !current)}>
+                {showAllProjects ? '仅显示最近 12 个' : `显示全部 ${projects.length} 个项目`}
+              </button>
+            )}
             {project && (
-              <div className="project-data-summary" aria-label="当前项目数据概况">
-                <span>任务单元 <strong>{taskDataSummary.taskUnits}</strong></span>
-                <span>装备组 <strong>{taskDataSummary.equipmentGroups}</strong></span>
-                <span>任务阶段 <strong>{taskDataSummary.phases}</strong></span>
-                <span>任务链路 <strong>{taskDataSummary.links}</strong></span>
-                <span>频谱规则 <strong>{taskDataSummary.spectrumRules}</strong></span>
-                <span>创建时间 <strong>{formatProjectDate(project.created_at)}</strong></span>
-              </div>
+              <>
+                <div className="current-project-rename">
+                  <label htmlFor="current-project-name">当前项目名称</label>
+                  <div>
+                    <input id="current-project-name" value={projectRenameName} onChange={(event) => setProjectRenameName(event.target.value)} />
+                    <button type="button" onClick={() => void handleRenameProject()} disabled={busy || projectRenameName.trim() === project.name}>重命名</button>
+                  </div>
+                </div>
+                <div className="project-data-summary" aria-label="当前项目数据概况">
+                  <span>任务单元 <strong>{taskDataSummary.taskUnits}</strong></span>
+                  <span>装备组 <strong>{taskDataSummary.equipmentGroups}</strong></span>
+                  <span>任务阶段 <strong>{taskDataSummary.phases}</strong></span>
+                  <span>任务链路 <strong>{taskDataSummary.links}</strong></span>
+                  <span>频谱规则 <strong>{taskDataSummary.spectrumRules}</strong></span>
+                  <span>创建时间 <strong>{formatProjectDate(project.created_at)}</strong></span>
+                </div>
+              </>
             )}
           </div>
           <label className="field-label" htmlFor="task-scenario">
-            样例任务场景
+            仿真数据预设
           </label>
           <select id="task-scenario" name="task_scenario" value={scenario} onChange={(event) => setScenario(event.target.value)}>
             {(scenarios.length ? scenarios : [{ key: 'baseline', name: '高密度联合作战基线', description: '' }]).map((item) => (
               <option key={item.key} value={item.key}>
-                {item.name}
+                {scenarioDisplayName(item)}
               </option>
             ))}
           </select>
-          <p className="objective-help">{scenarios.find((item) => item.key === scenario)?.description}</p>
+          <p className="objective-help">用途：{scenarios.find((item) => item.key === scenario)?.description}</p>
           <button className="wide secondary" onClick={handleGenerateDemo} disabled={busy || !project}>
             <WandSparkles size={16} />
             生成样例场景
@@ -1544,7 +1598,7 @@ function ReferenceProjectBar({
     <section className="reference-project-bar" aria-label="项目状态摘要">
       <div className="project-meta">
         <span>项目名称：</span>
-        <strong>{project?.name ?? '演训-东部战区-2025A'}</strong>
+        <strong>{project?.name ?? '尚未选择项目'}</strong>
       </div>
       <span className={`project-pill ${tone}`}>{statusText}</span>
       <div className="project-meta">
@@ -1858,7 +1912,7 @@ function DashboardSideRail({
       </nav>
       <div className="side-rail-status">
         <span>当前项目</span>
-        <strong>{project?.name ?? '演训-东部战区-2026A'}</strong>
+        <strong>{project?.name ?? '尚未选择项目'}</strong>
         <p>{plan?.status === 'success' ? `方案 #${plan.run_id}` : '等待规划方案'}</p>
         <div>
           <Metric label="保障" value={satisfaction !== null ? `${satisfaction.toFixed(1)}%` : '待生成'} />
@@ -1886,6 +1940,8 @@ function DashboardSideRail({
 
 function TaskDashboardOverview({
   project,
+  mission,
+  dataSummary,
   validation,
   plan,
   visualization,
@@ -1898,8 +1954,11 @@ function TaskDashboardOverview({
   onPlan,
   onCompare,
   onRunBatch,
+  onOpenTasks,
 }: {
   project: Project | null;
+  mission: MissionTaskRecord | null;
+  dataSummary: { taskUnits: number; equipmentGroups: number; spectrumRules: number; phases: number; links: number };
   validation: TaskValidationResult | null;
   plan: PlanResult | null;
   visualization: TaskVisualizationData | null;
@@ -1912,6 +1971,7 @@ function TaskDashboardOverview({
   onPlan: () => void;
   onCompare: () => void;
   onRunBatch: () => void;
+  onOpenTasks: () => void;
 }) {
   const summary = visualization?.summary ?? plan?.summary ?? {};
   const quality = recordValue(summary.quality_scores);
@@ -1920,11 +1980,13 @@ function TaskDashboardOverview({
     numberValue(summary.task_unit_count),
     visualization?.task_units.length,
     numberValue(validation?.summary.task_unit_count),
+    dataSummary.taskUnits,
   );
   const equipmentGroupCount = dashboardFirstNumber(
     numberValue(summary.equipment_group_count),
     visualization?.assignments.length,
     numberValue(validation?.summary.equipment_group_count),
+    dataSummary.equipmentGroups,
   );
   const satisfaction = numberValue(summary.task_satisfaction_avg);
   const usedBandwidth = numberValue(summary.used_bandwidth_mhz);
@@ -1965,6 +2027,44 @@ function TaskDashboardOverview({
       : '等待任务保障矩阵';
   const bandwidthNote =
     totalBandwidth !== null && usedBandwidth !== null ? `总可用 ${totalBandwidth.toFixed(1)} MHz` : '跨频段资源占用';
+  const readinessItems = [
+    { label: '任务定义', value: mission?.name || '未设置', ready: Boolean(mission) },
+    { label: '任务阶段', value: `${dataSummary.phases} 个`, ready: dataSummary.phases > 0 },
+    { label: '任务单元', value: `${dataSummary.taskUnits} 个`, ready: dataSummary.taskUnits > 0 },
+    { label: '装备组', value: `${dataSummary.equipmentGroups} 个`, ready: dataSummary.equipmentGroups > 0 },
+    { label: '任务链路', value: `${dataSummary.links} 条`, ready: dataSummary.links > 0 },
+    { label: '频谱规则', value: `${dataSummary.spectrumRules} 条`, ready: dataSummary.spectrumRules > 0 },
+  ];
+  const readinessCount = readinessItems.filter((item) => item.ready).length;
+  const riskFocus = [...riskItems]
+    .sort((left, right) => riskSeverityRank(right.severity) - riskSeverityRank(left.severity) || right.score - left.score)
+    .slice(0, 4);
+  const nextActions = agentAssessment?.next_actions.slice(0, 3) ?? [];
+  const missionRange = mission?.starts_at || mission?.ends_at
+    ? `${formatMissionTime(mission.starts_at)} ～ ${formatMissionTime(mission.ends_at)}`
+    : '未设置';
+
+  if (!project) {
+    return (
+      <section id="dashboard-overview" className="dashboard-overview overview-onboarding" aria-label="项目总览启动引导">
+        <div className="overview-welcome">
+          <div>
+            <span className="brand-mark"><RadioTower size={23} /></span>
+            <div>
+              <h2>尚未选择筹划项目</h2>
+              <p>先创建或打开项目，再接入任务、装备与频谱资源。总览将随筹划进度自动展示保障率、风险、频谱压力和版本状态。</p>
+            </div>
+          </div>
+          <button type="button" onClick={onOpenTasks}><Plus size={16} />创建或选择项目</button>
+        </div>
+        <div className="overview-start-steps">
+          <article><strong>1</strong><div><b>建立项目</b><span>按“场景/区域 - 筹划主题 - 日期”命名</span></div></article>
+          <article><strong>2</strong><div><b>接入任务数据</b><span>维护任务阶段、任务单元、装备组与链路</span></div></article>
+          <article><strong>3</strong><div><b>规划与复核</b><span>执行校验、自动规划、风险评估和方案采纳</span></div></article>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section id="dashboard-overview" className="dashboard-overview reference-dashboard-canvas" aria-label="战场智能用频筹划驾驶舱总览">
@@ -2014,6 +2114,88 @@ function TaskDashboardOverview({
             查看报告
           </a>
         )}
+      </div>
+
+      <div className="overview-detail-grid">
+        <section className="overview-block mission-overview">
+          <div className="overview-block-head"><div><ClipboardList size={17} /><h2>当前任务</h2></div><span>{mission ? '已定义' : '待定义'}</span></div>
+          {mission ? (
+            <>
+              <strong className="overview-primary-value">{mission.name}</strong>
+              <dl>
+                <div><dt>任务类型</dt><dd>{mission.mission_type || '未分类'}</dd></div>
+                <div><dt>优先级</dt><dd>{mission.priority}</dd></div>
+                <div><dt>最低保障率</dt><dd>{Math.round(mission.required_assurance * 100)}%</dd></div>
+                <div><dt>任务地域</dt><dd>{mission.region_name || '未设置'}</dd></div>
+                <div className="wide"><dt>任务时段</dt><dd>{missionRange}</dd></div>
+              </dl>
+            </>
+          ) : (
+            <div className="overview-inline-empty"><span>尚未建立任务定义</span><button type="button" onClick={onOpenTasks}>前往任务管理</button></div>
+          )}
+        </section>
+
+        <section className="overview-block readiness-overview">
+          <div className="overview-block-head"><div><FileCheck2 size={17} /><h2>数据准备度</h2></div><strong>{readinessCount}/6</strong></div>
+          <div className="readiness-progress"><i style={{ width: `${(readinessCount / readinessItems.length) * 100}%` }} /></div>
+          <div className="readiness-list">
+            {readinessItems.map((item) => (
+              <span className={item.ready ? 'ready' : ''} key={item.label}>
+                {item.ready ? <CheckCircle2 size={14} /> : <i />}
+                <b>{item.label}</b>
+                <em>{item.value}</em>
+              </span>
+            ))}
+          </div>
+        </section>
+
+        <section className="overview-block spectrum-overview">
+          <div className="overview-block-head"><div><RadioTower size={17} /><h2>频谱压力</h2></div><span>{topBands.length ? `${topBands.length} 个重点频段` : '等待规划'}</span></div>
+          {topBands.length ? (
+            <div className="overview-band-list">
+              {topBands.map((band) => (
+                <div key={band.band_group}>
+                  <span><b>{band.band_group}</b><em>{band.utilization_pct.toFixed(1)}%</em></span>
+                  <i><b style={{ width: `${Math.min(100, band.utilization_pct)}%` }} /></i>
+                  <small>已用 {band.used_width_mhz.toFixed(2)} / {band.available_width_mhz.toFixed(2)} MHz</small>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="overview-inline-empty"><span>完成一次规划后展示频段占用和瓶颈</span><button type="button" onClick={onPlan} disabled={busy}>执行规划</button></div>
+          )}
+        </section>
+
+        <section className="overview-block risk-action-overview">
+          <div className="overview-block-head"><div><ShieldAlert size={17} /><h2>风险与行动</h2></div><span>{riskFocus.length ? `${riskItems.length} 条风险` : '暂无风险结果'}</span></div>
+          {riskFocus.length ? (
+            <div className="overview-risk-list">
+              {riskFocus.map((risk, index) => (
+                <article key={`${risk.risk_type}-${risk.reason}-${index}`}>
+                  <span className={riskTone(risk.severity)}>{risk.severity}</span>
+                  <div><strong>{risk.risk_type}</strong><p>{shorten(risk.reason, 76)}</p></div>
+                  <em>{risk.score.toFixed(1)}</em>
+                </article>
+              ))}
+            </div>
+          ) : nextActions.length ? (
+            <div className="overview-action-list">{nextActions.map((action) => <span key={action.action_id}><b>{action.title}</b>{action.why}</span>)}</div>
+          ) : (
+            <div className="overview-inline-empty"><span>校验并规划后生成风险解释和建议动作</span><button type="button" onClick={onValidate} disabled={busy}>数据校验</button></div>
+          )}
+        </section>
+
+        <section className="overview-block lifecycle-overview">
+          <div className="overview-block-head"><div><Save size={17} /><h2>方案与留痕</h2></div><span>{plan ? `当前版本 #${plan.run_id}` : '尚未生成版本'}</span></div>
+          <div className="overview-lifecycle-metrics">
+            <div><span>成功版本</span><strong>{activeVersionCount}</strong></div>
+            <div><span>审计记录</span><strong>{auditCount}</strong></div>
+            <div><span>质量分</span><strong>{dashboardMetricValue(qualityTotal, '', 1)}</strong></div>
+            <div><span>最大耗时</span><strong>{maxElapsedMs !== null ? `${Math.round(maxElapsedMs)} ms` : '待测试'}</strong></div>
+            <div><span>验收阻断</span><strong>{blockedGates ?? '待评估'}</strong></div>
+          </div>
+          <p>{leaderSummary}</p>
+        </section>
       </div>
     </section>
   );
@@ -5529,6 +5711,33 @@ function formatProjectDate(value: string): string {
   return parsed.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+function suggestedProjectName(sceneName: string): string {
+  const today = new Date();
+  const date = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+  const scene = sceneName.replace(/^SIM\s*/i, '公开战例仿真-').trim() || '联合任务';
+  return `${scene}-用频筹划-${date}`;
+}
+
+function scenarioProjectBaseName(scenario: TaskScenario | undefined): string {
+  if (!scenario) return '高密度联合作战基线';
+  return scenario.name.replace(/^SIM\s*/i, '').replace(/压力效能测试/, '36单元高密度压力测试');
+}
+
+function scenarioDisplayName(scenario: TaskScenario): string {
+  if (scenario.key.startsWith('sim_')) return `公开战例仿真｜${scenario.name.replace(/^SIM\s*/i, '')}`;
+  if (scenario.key === 'stress_performance') return `规模压测｜${scenario.name}`;
+  return `任务模板｜${scenario.name}`;
+}
+
+function projectOptionLabel(project: Project): string {
+  const status = project.status.includes('planned') || project.status.includes('planning')
+    ? '已有方案'
+    : project.status.includes('data') || project.status.includes('updated')
+      ? '已有数据'
+      : '待配置';
+  return `#${project.id}｜${project.name}｜${status}`;
+}
+
 function formatMissionTime(value: string | null): string {
   if (!value) return '未设置';
   const parsed = new Date(value);
@@ -5683,6 +5892,12 @@ function dashboardReadinessStatus(
 function isHighRiskSeverity(severity: string): boolean {
   const normalized = severity.toLowerCase();
   return severity.includes('高') || normalized.includes('high');
+}
+
+function riskSeverityRank(severity: string): number {
+  if (isHighRiskSeverity(severity)) return 3;
+  if (isMediumRiskSeverity(severity)) return 2;
+  return 1;
 }
 
 function isMediumRiskSeverity(severity: string): boolean {

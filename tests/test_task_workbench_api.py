@@ -38,6 +38,21 @@ def _project(client: TestClient, name: str) -> int:
     return response.json()["id"]
 
 
+def test_project_can_be_renamed_with_audit(api: tuple[TestClient, object]) -> None:
+    client, engine = api
+    project_id = _project(client, "临时项目")
+
+    renamed = client.put(f"/api/projects/{project_id}", json={"name": "城区机动通信保障-用频筹划-20260711"})
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["name"] == "城区机动通信保障-用频筹划-20260711"
+
+    with Session(engine) as session:
+        audit = session.exec(
+            select(AuditLog).where(AuditLog.project_id == project_id, AuditLog.action == "rename_project")
+        ).one()
+        assert "城区机动通信保障" in audit.detail
+
+
 def _task_unit(task_unit_id: str, name: str | None = None) -> dict:
     return {
         "task_unit_id": task_unit_id,

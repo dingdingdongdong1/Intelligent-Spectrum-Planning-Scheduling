@@ -1373,6 +1373,14 @@ export async function listProjects(): Promise<Project[]> {
   return request<Project[]>('/api/projects');
 }
 
+export async function renameProject(projectId: number, name: string): Promise<Project> {
+  return request<Project>(`/api/projects/${projectId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+}
+
 export async function getTaskProjectData(projectId: number): Promise<TaskProjectData> {
   return request<TaskProjectData>(`/api/projects/${projectId}/task-data`);
 }

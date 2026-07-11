@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class ProjectCreate(BaseModel):
-    name: str = "未命名战场用频筹划项目"
+    name: str = Field(default="未命名用频筹划项目", min_length=2, max_length=100)
 
 
 class ProjectRead(BaseModel):

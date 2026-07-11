@@ -286,6 +286,29 @@ def list_projects(session: Session = Depends(get_session)) -> list[Project]:
     return session.exec(select(Project).order_by(Project.id.desc())).all()
 
 
+@app.put("/api/projects/{project_id}", response_model=ProjectRead)
+def rename_project(project_id: int, payload: ProjectCreate, session: Session = Depends(get_session)) -> Project:
+    project = _require_project(session, project_id)
+    name = payload.name.strip()
+    if len(name) < 2:
+        raise HTTPException(status_code=422, detail="项目名称至少需要 2 个字符")
+    previous_name = project.name
+    project.name = name
+    project.updated_at = datetime.utcnow()
+    session.add(project)
+    session.add(
+        AuditLog(
+            project_id=project_id,
+            actor="user",
+            action="rename_project",
+            detail=json.dumps({"before": previous_name, "after": name}, ensure_ascii=False),
+        )
+    )
+    session.commit()
+    session.refresh(project)
+    return project
+
+
 @app.get("/api/task-objectives", response_model=list[TaskObjectiveResponse])
 def task_objectives() -> list[dict]:
     return TASK_OBJECTIVES
