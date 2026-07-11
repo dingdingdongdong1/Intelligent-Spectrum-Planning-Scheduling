@@ -84,6 +84,7 @@ from .services.equipment_planning import (
 from .services.task_catalog import TASK_OBJECTIVES
 from .services import spectrum_resources, task_workbench
 from .services.task_intent import parse_task_intent
+from .services.trust_manifest import build_trust_manifest, verify_trust_root
 from .services.excel_io import (
     build_equipment_group_template,
     build_rule_template,
@@ -193,6 +194,16 @@ def phase_one_capabilities() -> dict:
                 "endpoints": ["POST /api/projects/{id}/task-plan", "GET /api/task-objectives"],
             },
             {
+                "id": "spectrum_resource_management",
+                "name": "频谱资源管理",
+                "status": "ready",
+                "evidence": ["固定/临时占用", "保护/禁用频段", "干扰源", "时空热力图"],
+                "endpoints": [
+                    "GET|POST /api/projects/{id}/spectrum-resources",
+                    "GET /api/projects/{id}/spectrum-resource-heatmap",
+                ],
+            },
+            {
                 "id": "interference_risk_assessment",
                 "name": "干扰风险评估",
                 "status": "ready",
@@ -228,11 +239,31 @@ def phase_one_capabilities() -> dict:
                 "id": "report_export",
                 "name": "报表导出与留痕",
                 "status": "ready",
-                "evidence": ["HTML 报告", "Excel 导出", "版本审计"],
+                "evidence": ["HTML/Excel/PDF 报告", "导出留痕", "版本审计"],
                 "endpoints": [
                     "GET /api/projects/{id}/task-report",
                     "GET /api/projects/{id}/task-export.xlsx",
                     "GET /api/projects/{id}/task-versions",
+                ],
+            },
+            {
+                "id": "intelligent_decision_assistance",
+                "name": "智能决策辅助",
+                "status": "ready",
+                "evidence": ["指挥意图解析", "确定性动作载荷", "受约束模型解释", "人工确认"],
+                "endpoints": [
+                    "POST /api/projects/{id}/task-intent",
+                    "GET /api/projects/{id}/task-agent-assessment",
+                ],
+            },
+            {
+                "id": "trust_verification",
+                "name": "安全可信与验真",
+                "status": "ready",
+                "evidence": ["输入输出 SHA-256", "审计哈希链", "确定性配置清单"],
+                "endpoints": [
+                    "GET /api/projects/{id}/task-trust-manifest",
+                    "GET /api/projects/{id}/task-trust-manifest.json",
                 ],
             },
         ],
@@ -888,6 +919,38 @@ async def task_intent(
     )
     session.commit()
     return result
+
+
+@app.get("/api/projects/{project_id}/task-trust-manifest")
+def task_trust_manifest(
+    project_id: int,
+    run_id: int | None = Query(default=None, alias="run"),
+    expected_root: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> dict:
+    _require_project(session, project_id)
+    run = _resolve_task_run(session, project_id, run_id)
+    try:
+        manifest = build_trust_manifest(session, project_id, int(run.id or 0))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return verify_trust_root(manifest, expected_root)
+
+
+@app.get("/api/projects/{project_id}/task-trust-manifest.json")
+def task_trust_manifest_export(
+    project_id: int,
+    run_id: int | None = Query(default=None, alias="run"),
+    session: Session = Depends(get_session),
+) -> StreamingResponse:
+    _require_project(session, project_id)
+    run = _resolve_task_run(session, project_id, run_id)
+    try:
+        manifest = build_trust_manifest(session, project_id, int(run.id or 0))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    content = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+    return _file_response(content, f"task_trust_manifest_project_{project_id}_run_{run.id}.json", "application/json; charset=utf-8")
 
 
 @app.get("/api/projects/{project_id}/task-visualization")

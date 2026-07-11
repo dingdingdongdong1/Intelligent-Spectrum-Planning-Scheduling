@@ -1303,6 +1303,49 @@ export type TaskIntentResult = {
   explanation_source: 'deterministic' | 'deterministic_fallback' | 'llm_enhanced';
 };
 
+export type TaskTrustManifestResponse = {
+  verified: boolean;
+  expected_artifact_sha256: string;
+  actual_artifact_sha256: string;
+  manifest: {
+    schema: string;
+    generated_at: string;
+    project: { project_id: number; name: string };
+    run: {
+      run_id: number;
+      objective: string;
+      status: string;
+      lifecycle_status: string;
+      adopted: boolean;
+      parent_run_id: number | null;
+      rollback_source_run_id: number | null;
+    };
+    reproducibility: {
+      deterministic: boolean;
+      algorithm_version: string;
+      requested_objective: string;
+      effective_objective: string;
+      strategy_profile: string;
+      constraint_weights: Record<string, number>;
+      input_snapshot_available: boolean;
+    };
+    integrity: {
+      input_sha256: string | null;
+      summary_sha256: string;
+      assignments_sha256: string;
+      risks_sha256: string;
+      output_sha256: string;
+      artifact_sha256: string;
+      audit_chain_root_sha256: string;
+      audit_event_count: number;
+    };
+    verification: {
+      status: 'passed' | 'attention';
+      checks: Array<{ name: string; passed: boolean; evidence: string }>;
+    };
+  };
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init);
   if (!response.ok) {
@@ -1653,6 +1696,10 @@ export async function interpretTaskIntent(projectId: number, message: string): P
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message }),
   });
+}
+
+export async function getTaskTrustManifest(projectId: number, runId: number): Promise<TaskTrustManifestResponse> {
+  return request<TaskTrustManifestResponse>(`/api/projects/${projectId}/task-trust-manifest?run=${runId}`);
 }
 
 export async function runProjectTaskBatchPerformanceTest(projectId: number): Promise<TaskPerformanceResult> {

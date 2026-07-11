@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
@@ -93,6 +95,29 @@ def test_plan_adoption_and_rollback_restore_complete_inputs() -> None:
         assert restored_version["rollback_source_run_id"] == source_run_id
         assert restored_version["snapshot_available"] is True
         assert source_version["adopted"] is False
+
+        trust = client.get(f"/api/projects/{project_id}/task-trust-manifest?run={restored_run_id}")
+        assert trust.status_code == 200, trust.text
+        verification = trust.json()
+        manifest = verification["manifest"]
+        assert verification["verified"] is True
+        assert manifest["verification"]["status"] == "passed"
+        assert manifest["reproducibility"]["deterministic"] is True
+        assert manifest["reproducibility"]["input_snapshot_available"] is True
+        assert len(manifest["integrity"]["artifact_sha256"]) == 64
+        assert len(manifest["integrity"]["audit_chain_root_sha256"]) == 64
+        assert manifest["integrity"]["audit_event_count"] == len(manifest["audit_chain"])
+
+        repeated = client.get(f"/api/projects/{project_id}/task-trust-manifest?run={restored_run_id}").json()["manifest"]
+        assert repeated["integrity"] == manifest["integrity"]
+        mismatch = client.get(
+            f"/api/projects/{project_id}/task-trust-manifest?run={restored_run_id}&expected_root={'0' * 64}"
+        ).json()
+        assert mismatch["verified"] is False
+
+        exported = client.get(f"/api/projects/{project_id}/task-trust-manifest.json?run={restored_run_id}")
+        assert exported.status_code == 200
+        assert json.loads(exported.content)["integrity"]["artifact_sha256"] == manifest["integrity"]["artifact_sha256"]
     finally:
         app.dependency_overrides.clear()
         engine.dispose()

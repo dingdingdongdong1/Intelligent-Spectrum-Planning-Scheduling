@@ -21,6 +21,7 @@
 - 多方案对比：批量试算不同目标与约束模板，按保障、风险、频谱、优先级、切换和复用六维连续权重计算推荐得分，支持查看、正式采纳、策略复用和输入回滚。
 - 智能决策辅助：将自然语言指挥意图确定性解析为规划目标、六维权重、频段变化、锁定对象、优先级和保障硬约束；大模型仅负责受约束解释，所有变更必须先转为预案并人工确认。
 - 报表与留痕：导出 HTML、Excel、PDF 报告并记录每次导出，保留规划版本、完整输入快照、采纳状态、分类审计汇总和能力验收状态；历史版本可恢复任务、装备、链路、规则和频谱资源并生成新的回滚版本。
+- 安全可信验真：对完整输入快照、规划摘要、装备指配、风险记录生成 SHA-256 制品根，并对审计事件形成前向哈希链；支持页面核验、错误根检测和 JSON 验真清单归档。
 
 ## 快速启动
 
@@ -106,6 +107,8 @@ GET http://127.0.0.1:8000/api/phase-one-capabilities
 - `POST /api/projects/{id}/task-runs/{run_id}/rollback`
 - `GET /api/projects/{id}/task-agent-assessment`
 - `POST /api/projects/{id}/task-intent`
+- `GET /api/projects/{id}/task-trust-manifest`
+- `GET /api/projects/{id}/task-trust-manifest.json`
 
 ## LLM 配置
 

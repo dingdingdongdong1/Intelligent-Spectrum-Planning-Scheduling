@@ -48,6 +48,7 @@ import {
   TaskComparisonResult,
   TaskAgentAssessment,
   TaskIntentResult,
+  TaskTrustManifestResponse,
   TaskObjective,
   TaskPerformanceResult,
   TaskProjectData,
@@ -80,6 +81,7 @@ import {
   getTaskVersions,
   getTaskVisualization,
   interpretTaskIntent,
+  getTaskTrustManifest,
   listTaskSpectrumRules,
   listProjects,
   planTaskProject,
@@ -1443,6 +1445,7 @@ export default function TaskPlanningApp() {
                   onAdoptRun={handleAdoptVersion}
                   onRollbackRun={handleRollbackVersion}
                 />
+                <TrustManifestPanel projectId={project?.id ?? null} runId={visualizationRunId ?? plan?.run_id ?? null} />
                 <PlanningPerformancePanel busy={busy} data={performance} onRun={handlePerformanceTest} onRunBatch={handleBatchPerformanceTest} />
                 <CapacityBatchExecutionPanel
                   data={capacityBatchExecution}
@@ -5142,6 +5145,87 @@ function Metric({ label, value }: { label: string; value: unknown }) {
       <strong>{String(value ?? '-')}</strong>
     </div>
   );
+}
+
+function TrustManifestPanel({ projectId, runId }: { projectId: number | null; runId: number | null }) {
+  const [data, setData] = useState<TaskTrustManifestResponse | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!projectId || !runId) {
+      setData(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    void getTaskTrustManifest(projectId, runId)
+      .then((result) => {
+        if (!cancelled) setData(result);
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : '验真清单加载失败');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, runId]);
+
+  const manifest = data?.manifest;
+  const integrity = manifest?.integrity;
+  return (
+    <section className="panel trust-manifest-panel" aria-label="方案可信验真">
+      <div className="report-header">
+        <div className="panel-title">
+          <Lock size={18} />
+          <h2>方案可信验真</h2>
+        </div>
+        {projectId && runId && (
+          <a className="trust-download" href={url(`/api/projects/${projectId}/task-trust-manifest.json?run=${runId}`)}>
+            <Download size={15} />
+            下载验真清单
+          </a>
+        )}
+      </div>
+      {loading ? (
+        <div className="empty small">正在核验输入、输出与审计链</div>
+      ) : error ? (
+        <div className="empty small">{error}</div>
+      ) : manifest && integrity ? (
+        <>
+          <div className={`trust-status ${data?.verified && manifest.verification.status === 'passed' ? 'passed' : 'attention'}`}>
+            <strong>{data?.verified && manifest.verification.status === 'passed' ? '验真通过' : '需要关注'}</strong>
+            <span>版本 #{manifest.run.run_id} · {manifest.run.lifecycle_status} · {manifest.reproducibility.algorithm_version}</span>
+          </div>
+          <div className="trust-metric-grid">
+            <div><span>输入快照</span><strong>{manifest.reproducibility.input_snapshot_available ? '完整' : '缺失'}</strong><em>{shortHash(integrity.input_sha256)}</em></div>
+            <div><span>规划输出</span><strong>已摘要</strong><em>{shortHash(integrity.output_sha256)}</em></div>
+            <div><span>审计事件</span><strong>{integrity.audit_event_count}</strong><em>{shortHash(integrity.audit_chain_root_sha256)}</em></div>
+            <div><span>制品根哈希</span><strong>SHA-256</strong><em>{shortHash(integrity.artifact_sha256)}</em></div>
+          </div>
+          <div className="trust-checks">
+            {manifest.verification.checks.map((check) => (
+              <span className={check.passed ? 'passed' : 'attention'} key={check.name}>
+                <b>{check.passed ? '通过' : '关注'} · {check.name}</b>
+                {check.evidence}
+              </span>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="empty small">选择成功规划版本后生成验真证据</div>
+      )}
+    </section>
+  );
+}
+
+function shortHash(value: string | null | undefined): string {
+  if (!value) return '-';
+  return `${value.slice(0, 10)}...${value.slice(-8)}`;
 }
 
 function VersionAuditPanel({

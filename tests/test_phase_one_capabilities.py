@@ -16,12 +16,15 @@ def test_phase_one_capability_manifest_is_complete() -> None:
         "task_unit_management",
         "equipment_group_management",
         "spectrum_rule_management",
+        "spectrum_resource_management",
         "automatic_planning",
         "interference_risk_assessment",
         "visual_overview",
         "dynamic_replanning",
         "multi_plan_comparison",
+        "intelligent_decision_assistance",
         "report_export",
+        "trust_verification",
     } <= capability_ids
     assert all(item["status"] == "ready" for item in data["capabilities"])
     assert all(item["endpoints"] for item in data["capabilities"])
