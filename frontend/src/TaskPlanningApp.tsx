@@ -1413,8 +1413,17 @@ export default function TaskPlanningApp() {
             {activeModule === 'report' && (
               <section id="dashboard-report" className="panel report-panel dashboard-section">
                 <div className="report-header">
-                  <h2>任务规划报告</h2>
-                  {plan && <span>{plan.message}</span>}
+                  <div>
+                    <h2>任务规划报告</h2>
+                    {plan && <span>当前版本 #{plan.run_id} · {plan.message}</span>}
+                  </div>
+                  {project && plan?.status === 'success' && (
+                    <div className="report-actions">
+                      <a href={reportUrl} target="_blank" rel="noreferrer"><Eye size={15} />HTML</a>
+                      <a href={url(`/api/projects/${project.id}/task-export.xlsx?run=${plan.run_id}`)}><Download size={15} />Excel</a>
+                      <a href={url(`/api/projects/${project.id}/task-report.pdf?run=${plan.run_id}`)}><FileCheck2 size={15} />PDF</a>
+                    </div>
+                  )}
                 </div>
                 {reportUrl ? <iframe title="任务规划报告" src={reportUrl} /> : <div className="empty">等待成功规划结果</div>}
               </section>
@@ -5109,6 +5118,15 @@ function VersionAuditPanel({
           刷新
         </button>
       </div>
+      {data?.audit_summary && (
+        <div className="audit-summary-grid" aria-label="审计汇总">
+          <div><span>全部记录</span><strong>{data.audit_summary.total_count}</strong></div>
+          <div><span>规划运行</span><strong>{data.audit_summary.planning_count}</strong></div>
+          <div><span>动态重筹</span><strong>{data.audit_summary.replan_count}</strong></div>
+          <div><span>人工修改</span><strong>{data.audit_summary.manual_change_count}</strong></div>
+          <div><span>报告导出</span><strong>{data.audit_summary.export_count}</strong></div>
+        </div>
+      )}
       {!data ? (
         <div className="empty small">完成规划后显示版本和审计记录</div>
       ) : (
@@ -5319,6 +5337,9 @@ function auditActionLabel(action: string): string {
     task_plan_adopted: '正式采纳方案',
     task_plan_rollback_restore: '恢复方案输入',
     task_plan_rollback_completed: '完成方案回滚',
+    task_report_html: '查看 HTML 报告',
+    task_report_xlsx: '导出 Excel 报告',
+    task_report_pdf: '导出 PDF 报告',
   };
   return labels[action] ?? action;
 }
@@ -5345,6 +5366,9 @@ function auditLogSummary(log: TaskAuditLog): string {
       typeof changeCount === 'number' ? `${changeCount} 项变更` : '',
     ].filter(Boolean);
     return shorten(parts.join('；') || log.detail, 140);
+  }
+  if (log.action.startsWith('task_report_')) {
+    return `归档规划版本 #${numberValue(detail.run_id) ?? log.run_id ?? '-'} 的 ${stringValue(detail.format).toUpperCase()} 报告`;
   }
   if (typeof detail.message === 'string') return shorten(detail.message, 140);
   return shorten(JSON.stringify(detail), 140);

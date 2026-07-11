@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from html import escape
 from itertools import combinations
+from pathlib import Path
 
 import pandas as pd
 from sqlmodel import Session, delete, select
@@ -2607,6 +2608,13 @@ def build_task_report(project: dict, run: dict, assignments: list[dict], risks: 
     .metric {{ border: 1px solid #d8dde8; padding: 12px; border-radius: 6px; background: #fbfcff; }}
     .metric strong {{ display: block; font-size: 22px; margin-top: 4px; }}
     .conclusion {{ background: #f7f9fd; border: 1px solid #d8dde8; border-radius: 8px; padding: 14px 16px; }}
+    @media (max-width: 700px) {{
+      body {{ margin: 16px; }}
+      h1 {{ font-size: 28px; }}
+      .summary {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      table {{ display: block; overflow-x: auto; white-space: nowrap; }}
+      th, td {{ min-width: 92px; }}
+    }}
   </style>
 </head>
 <body>
@@ -2734,6 +2742,192 @@ def build_task_export_xlsx(assignments: list[dict], risks: list[dict], summary: 
         contention = summary.get("spectrum_contention", {})
         pd.DataFrame(contention.get("top_loss_sources", [])).to_excel(writer, index=False, sheet_name="频谱损失来源")
         pd.DataFrame(_audit_checklist(summary, visualization.get("assignments", []) if visualization else [])).to_excel(writer, index=False, sheet_name="审核清单")
+    return buffer.getvalue()
+
+
+def build_task_report_pdf(
+    project: dict,
+    run: dict,
+    assignments: list[dict],
+    risks: list[dict],
+    summary: dict,
+    visualization: dict | None = None,
+) -> bytes:
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    buffer = io.BytesIO()
+    font_name = "TaskReportChinese"
+    font_candidates = (
+        Path("C:/Windows/Fonts/simhei.ttf"),
+        Path("C:/Windows/Fonts/simsunb.ttf"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
+    )
+    embedded_font = next((item for item in font_candidates if item.exists()), None)
+    if embedded_font is not None:
+        pdfmetrics.registerFont(TTFont(font_name, str(embedded_font)))
+    else:
+        font_name = "STSong-Light"
+        pdfmetrics.registerFont(UnicodeCIDFont(font_name))
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle("ChineseBody", parent=styles["BodyText"], fontName=font_name, fontSize=8, leading=11)
+    heading = ParagraphStyle("ChineseHeading", parent=styles["Heading2"], fontName=font_name, fontSize=13, leading=17, spaceBefore=8, spaceAfter=6)
+    title = ParagraphStyle("ChineseTitle", parent=styles["Title"], fontName=font_name, fontSize=20, leading=24, alignment=TA_CENTER)
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        leftMargin=12 * mm,
+        rightMargin=12 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm,
+        title=f"任务用频规划报告-{project.get('name', '')}",
+    )
+
+    def text(value: object) -> Paragraph:
+        if isinstance(value, (list, tuple)):
+            value = "、".join(str(item) for item in value)
+        return Paragraph(escape(str(value if value is not None else "-")), body)
+
+    def compact_resource(value: object, limit: int = 4) -> str:
+        raw = str(value or "").strip()
+        if not raw:
+            return "-"
+        separator = ";" if ";" in raw else ","
+        parts = [part.strip() for part in raw.split(separator) if part.strip()]
+        if len(parts) <= limit:
+            return separator.join(parts)
+        return f"{separator.join(parts[:limit])}{separator} 等 {len(parts)} 项"
+
+    def backup_resource(item: dict) -> str:
+        raw = item.get("alternative_resources") or item.get("alternative_frequencies_mhz") or []
+        if not isinstance(raw, list):
+            return compact_resource(raw)
+        values = []
+        for alternative in raw:
+            if isinstance(alternative, dict):
+                value = alternative.get("resource") or alternative.get("frequency_mhz")
+                if value:
+                    values.append(str(value))
+                elif alternative.get("band_group"):
+                    values.append(f"{alternative.get('band_group')}({alternative.get('status', '候选')})")
+            elif alternative:
+                values.append(str(alternative))
+        return compact_resource("; ".join(values), 3)
+
+    def table(rows: list[list[object]], widths: list[float] | None = None) -> Table:
+        result = Table([[text(cell) for cell in row] for row in rows], colWidths=widths, repeatRows=1, hAlign="LEFT")
+        result.setStyle(
+            TableStyle(
+                [
+                    ("FONTNAME", (0, 0), (-1, -1), font_name),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E9EEF7")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#172033")),
+                    ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#AEB9CB")),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        return result
+
+    story = [
+        Paragraph("任务单元用频规划报告", title),
+        Spacer(1, 5 * mm),
+        table(
+            [
+                ["项目", "规划版本", "规划目标", "生成时间"],
+                [project.get("name", "-"), f"#{run.get('id', '-')}", run.get("objective", "-"), datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")],
+            ],
+            [70 * mm, 28 * mm, 72 * mm, 70 * mm],
+        ),
+        Spacer(1, 4 * mm),
+        Paragraph("总体结论", heading),
+        text(_report_conclusion(summary)),
+        Spacer(1, 2 * mm),
+        text(summary.get("leader_summary", "")),
+        Spacer(1, 4 * mm),
+        table(
+            [
+                ["平均保障率", "完全满足", "部分满足", "未满足", "高风险", "中风险", "占用带宽 MHz", "质量分"],
+                [
+                    f"{summary.get('task_satisfaction_avg', 0)}%",
+                    summary.get("full_group_count", 0),
+                    summary.get("partial_group_count", 0),
+                    summary.get("unsatisfied_group_count", 0),
+                    summary.get("high_risk_count", 0),
+                    summary.get("medium_risk_count", 0),
+                    summary.get("used_bandwidth_mhz", 0),
+                    (summary.get("quality_scores") or {}).get("total", "-"),
+                ],
+            ]
+        ),
+    ]
+    assignment_rows: list[list[object]] = [["任务单元", "装备组", "类型", "主用资源", "备份资源", "保障率", "状态", "决策说明"]]
+    for item in assignments:
+        assignment_rows.append(
+            [
+                item.get("task_unit_id", "-"),
+                item.get("equipment_group_id", "-"),
+                item.get("equipment_type", "-"),
+                compact_resource(item.get("assigned_resource") or item.get("assigned_frequency_mhz")),
+                backup_resource(item),
+                f"{round(float(item.get('satisfaction_ratio') or 0) * 100, 1)}%",
+                item.get("status", "-"),
+                item.get("decision_notes") or item.get("reason") or "-",
+            ]
+        )
+    assignment_header = assignment_rows[0]
+    assignment_items = assignment_rows[1:]
+    for offset in range(0, len(assignment_items), 7):
+        page_number = offset // 7 + 1
+        page_count = math.ceil(len(assignment_items) / 7)
+        story.extend(
+            [
+                PageBreak(),
+                Paragraph(f"装备组频率指配（{page_number}/{page_count}）", heading),
+                table([assignment_header, *assignment_items[offset : offset + 7]], [27 * mm, 30 * mm, 30 * mm, 35 * mm, 42 * mm, 20 * mm, 22 * mm, 55 * mm]),
+            ]
+        )
+    story.extend([PageBreak(), Paragraph("干扰与冲突风险", heading)])
+    risk_rows: list[list[object]] = [["类型", "等级", "任务单元", "装备组", "频率/频段", "分值", "原因"]]
+    for item in risks:
+        risk_rows.append(
+            [
+                item.get("risk_type", "-"),
+                item.get("severity", "-"),
+                " / ".join(filter(None, [item.get("task_unit_a"), item.get("task_unit_b")])) or item.get("task_unit_id", "-"),
+                " / ".join(filter(None, [item.get("equipment_group_a"), item.get("equipment_group_b")])) or item.get("equipment_group_id", "-"),
+                compact_resource(" / ".join(filter(None, [item.get("resource_a"), item.get("resource_b")])) or item.get("frequency_mhz") or item.get("band_group")),
+                item.get("score", 0),
+                item.get("reason", "-"),
+            ]
+        )
+    story.append(table(risk_rows, [30 * mm, 18 * mm, 28 * mm, 30 * mm, 31 * mm, 16 * mm, 108 * mm]))
+    story.append(Paragraph("审核清单", heading))
+    for index, item in enumerate(_audit_checklist(summary, (visualization or {}).get("assignments", [])), 1):
+        story.append(text(f"{index}. {item}"))
+        story.append(Spacer(1, 1.2 * mm))
+
+    def add_page_footer(canvas, doc) -> None:
+        canvas.saveState()
+        canvas.setFont(font_name, 8)
+        canvas.setFillColor(colors.HexColor("#69758C"))
+        canvas.drawString(12 * mm, 7 * mm, f"项目：{project.get('name', '-')}  规划版本：#{run.get('id', '-')}")
+        canvas.drawRightString(landscape(A4)[0] - 12 * mm, 7 * mm, f"第 {doc.page} 页")
+        canvas.restoreState()
+
+    document.build(story, onFirstPage=add_page_footer, onLaterPages=add_page_footer)
     return buffer.getvalue()
 
 
@@ -4109,7 +4303,10 @@ def task_versions_and_audit(session: Session, project_id: int) -> dict:
         item.run_id: item
         for item in session.exec(select(PlanningSnapshot).where(PlanningSnapshot.project_id == project_id)).all()
     }
-    logs = session.exec(select(AuditLog).where(AuditLog.project_id == project_id).order_by(AuditLog.id.desc()).limit(40)).all()
+    all_logs = session.exec(select(AuditLog).where(AuditLog.project_id == project_id).order_by(AuditLog.id.desc())).all()
+    logs = all_logs[:40]
+    action_counts = Counter(log.action for log in all_logs)
+    manual_prefixes = ("create_", "update_", "delete_", "upload_", "generate_", "replace_")
     return {
         "runs": [
             {
@@ -4131,6 +4328,16 @@ def task_versions_and_audit(session: Session, project_id: int) -> dict:
         ],
         "performance_history": _performance_history_from_logs(session, project_id),
         "closure_events": _capacity_closure_events_from_logs(logs),
+        "audit_summary": {
+            "total_count": len(all_logs),
+            "planning_count": sum(count for action, count in action_counts.items() if action.startswith("task_plan")),
+            "replan_count": sum(count for action, count in action_counts.items() if action.startswith("task_replan")),
+            "manual_change_count": sum(count for action, count in action_counts.items() if action.startswith(manual_prefixes)),
+            "export_count": sum(count for action, count in action_counts.items() if action.startswith("task_report_")),
+            "actor_counts": dict(Counter(log.actor for log in all_logs)),
+            "action_counts": dict(action_counts.most_common()),
+            "last_activity_at": all_logs[0].created_at.isoformat() if all_logs else None,
+        },
         "audit_logs": [
             {
                 "id": log.id,

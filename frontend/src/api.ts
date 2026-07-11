@@ -1194,6 +1194,16 @@ export type TaskAuditLog = {
 export type TaskVersionsResult = {
   runs: TaskVersionRun[];
   audit_logs: TaskAuditLog[];
+  audit_summary?: {
+    total_count: number;
+    planning_count: number;
+    replan_count: number;
+    manual_change_count: number;
+    export_count: number;
+    actor_counts: Record<string, number>;
+    action_counts: Record<string, number>;
+    last_activity_at: string | null;
+  };
   closure_events?: Array<{
     id: number;
     run_id: number | null;

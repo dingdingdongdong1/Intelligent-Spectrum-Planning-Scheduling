@@ -114,6 +114,8 @@ def test_task_planning_api_end_to_end_acceptance_flow() -> None:
         versions = _assert_ok(client.get(f"/api/projects/{project_id}/task-versions"))
         assert versions["runs"]
         assert versions["audit_logs"]
+        assert versions["audit_summary"]["planning_count"] > 0
+        assert versions["audit_summary"]["manual_change_count"] > 0
         assert versions["performance_history"]
         assert versions["closure_events"]
         assert versions["closure_events"][0]["applied_rule_count"] == closure["closure"]["applied_rule_count"]
@@ -121,5 +123,17 @@ def test_task_planning_api_end_to_end_acceptance_flow() -> None:
         report = client.get(f"/api/projects/{project_id}/task-report?run={closure['runs'][0]['run_id']}")
         assert report.status_code == 200
         assert "text/html" in report.headers["content-type"]
+
+        pdf_report = client.get(f"/api/projects/{project_id}/task-report.pdf?run={closure['runs'][0]['run_id']}")
+        assert pdf_report.status_code == 200
+        assert pdf_report.content[:4] == b"%PDF"
+        assert "application/pdf" in pdf_report.headers["content-type"]
+
+        export = client.get(f"/api/projects/{project_id}/task-export.xlsx?run={closure['runs'][0]['run_id']}")
+        assert export.status_code == 200
+        assert export.content[:2] == b"PK"
+
+        audited_exports = _assert_ok(client.get(f"/api/projects/{project_id}/task-versions"))
+        assert audited_exports["audit_summary"]["export_count"] >= 3
     finally:
         app.dependency_overrides.clear()

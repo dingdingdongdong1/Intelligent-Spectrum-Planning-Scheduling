@@ -42,6 +42,7 @@ from .services.comparison import compare_plans
 from .services.equipment_planning import (
     build_task_export_xlsx,
     build_task_report,
+    build_task_report_pdf,
     build_task_visualization_data,
     adopt_task_plan,
     compare_task_plans,
@@ -958,7 +959,7 @@ def task_report(
         risk_items=risks,
         summary=summary,
     )
-    return build_task_report(
+    content = build_task_report(
         project=project.model_dump(),
         run=run.model_dump(),
         assignments=assignments,
@@ -966,6 +967,39 @@ def task_report(
         summary=summary,
         visualization=visualization_data,
     )
+    _record_report_export(session, project_id, run.id, "task_report_html")
+    return content
+
+
+@app.get("/api/projects/{project_id}/task-report.pdf")
+def task_report_pdf(
+    project_id: int,
+    run_id: int | None = Query(default=None, alias="run"),
+    session: Session = Depends(get_session),
+) -> StreamingResponse:
+    project = _require_project(session, project_id)
+    run = _resolve_task_run(session, project_id, run_id)
+    assignments = task_assignments_for_run(session, project_id, run.id)
+    risks = task_risks_for_run(session, project_id, run.id)
+    summary = json.loads(run.summary_json or "{}")
+    visualization_data = build_task_visualization_data(
+        task_units=db_task_units_to_dicts(session, project_id),
+        equipment_groups=db_equipment_groups_to_dicts(session, project_id),
+        spectrum_rules=planning_spectrum_rules(session, project_id),
+        assignments=assignments,
+        risk_items=risks,
+        summary=summary,
+    )
+    content = build_task_report_pdf(
+        project=project.model_dump(),
+        run=run.model_dump(),
+        assignments=assignments,
+        risks=risks,
+        summary=summary,
+        visualization=visualization_data,
+    )
+    _record_report_export(session, project_id, run.id, "task_report_pdf")
+    return _file_response(content, f"task_planning_project_{project_id}_run_{run.id}.pdf", "application/pdf")
 
 
 @app.get("/api/projects/{project_id}/export.xlsx")
@@ -1006,6 +1040,7 @@ def task_export(
         summary=summary,
     )
     content = build_task_export_xlsx(assignments=assignments, risks=risks, summary=summary, visualization=visualization_data)
+    _record_report_export(session, project_id, run.id, "task_report_xlsx")
     return _xlsx_response(content, f"task_planning_project_{project_id}_run_{run.id}.xlsx")
 
 
@@ -1253,9 +1288,22 @@ def _run_response(run: PlanningRun) -> dict:
 
 
 def _xlsx_response(content: bytes, filename: str) -> StreamingResponse:
+    return _file_response(content, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+def _file_response(content: bytes, filename: str, media_type: str) -> StreamingResponse:
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return StreamingResponse(
-        BytesIO(content),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers=headers,
+    return StreamingResponse(BytesIO(content), media_type=media_type, headers=headers)
+
+
+def _record_report_export(session: Session, project_id: int, run_id: int | None, action: str) -> None:
+    session.add(
+        AuditLog(
+            project_id=project_id,
+            run_id=run_id,
+            actor="user",
+            action=action,
+            detail=json.dumps({"format": action.rsplit("_", 1)[-1], "run_id": run_id}, ensure_ascii=False),
+        )
     )
+    session.commit()

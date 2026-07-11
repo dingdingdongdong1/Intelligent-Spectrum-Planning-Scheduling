@@ -19,7 +19,7 @@
 - 可视化总览：展示任务保障率、频段占用、空间态势联动、任务保障矩阵。
 - 动态重规划：支持禁用/补充频段、优先级变化、装备损毁或新增、任务单元机动、动态干扰源，以及锁定任务或装备后的预览、试算、确认重筹和版本回滚。
 - 多方案对比：批量试算不同目标与约束模板，按保障、风险、频谱、优先级、切换和复用六维连续权重计算推荐得分，支持查看、正式采纳、策略复用和输入回滚。
-- 报表与留痕：导出 HTML 报告、Excel 结果，保留规划版本、完整输入快照、采纳状态、审计日志和能力验收状态；历史版本可恢复任务、装备、链路、规则和频谱资源并生成新的回滚版本。
+- 报表与留痕：导出 HTML、Excel、PDF 报告并记录每次导出，保留规划版本、完整输入快照、采纳状态、分类审计汇总和能力验收状态；历史版本可恢复任务、装备、链路、规则和频谱资源并生成新的回滚版本。
 
 ## 快速启动
 
@@ -99,6 +99,7 @@ GET http://127.0.0.1:8000/api/phase-one-capabilities
 - `POST /api/projects/{id}/task-replan`
 - `GET /api/projects/{id}/task-report`
 - `GET /api/projects/{id}/task-export.xlsx`
+- `GET /api/projects/{id}/task-report.pdf`
 - `GET /api/projects/{id}/task-versions`
 - `POST /api/projects/{id}/task-runs/{run_id}/adopt`
 - `POST /api/projects/{id}/task-runs/{run_id}/rollback`
