@@ -180,6 +180,7 @@ export default function TaskPlanningApp() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [taskDataSummary, setTaskDataSummary] = useState({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0, phases: 0, links: 0 });
   const [taskMission, setTaskMission] = useState<MissionTaskRecord | null>(null);
+  const [taskProjectData, setTaskProjectData] = useState<TaskProjectData | null>(null);
   const [taskDataRevision, setTaskDataRevision] = useState(0);
   const [activeModule, setActiveModule] = useState<DashboardModuleKey>('overview');
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
@@ -366,6 +367,7 @@ export default function TaskPlanningApp() {
   }
 
   function applyTaskDataSummary(data: TaskProjectData) {
+    setTaskProjectData(data);
     setTaskMission(data.mission ?? null);
     setTaskDataSummary({
       taskUnits: data.task_units.length,
@@ -380,6 +382,7 @@ export default function TaskPlanningApp() {
     try {
       applyTaskDataSummary(await getTaskProjectData(projectId));
     } catch {
+      setTaskProjectData(null);
       setTaskMission(null);
       setTaskDataSummary({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0, phases: 0, links: 0 });
     }
@@ -445,6 +448,7 @@ export default function TaskPlanningApp() {
       setProjects((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       clearPlanningState();
       setSpectrumRules([]);
+      setTaskProjectData(null);
       setTaskMission(null);
       setTaskDataSummary({ taskUnits: 0, equipmentGroups: 0, spectrumRules: 0, phases: 0, links: 0 });
       window.localStorage.setItem('spectrum-planning-project-id', String(created.id));
@@ -1071,9 +1075,10 @@ export default function TaskPlanningApp() {
 
           <div className="dashboard-page-shell" aria-label={activeModuleTitle}>
             {activeModule === 'overview' && (
-              <TaskDashboardOverview
+              <MapCentricDashboard
                 project={project}
                 mission={taskMission}
+                taskData={taskProjectData}
                 dataSummary={taskDataSummary}
                 validation={validation}
                 plan={plan}
@@ -2018,6 +2023,287 @@ function DashboardSideRail({
       )}
     </aside>
   );
+}
+
+function MapCentricDashboard({
+  project,
+  mission,
+  taskData,
+  dataSummary,
+  validation,
+  plan,
+  visualization,
+  agentAssessment,
+  performance,
+  versions,
+  busy,
+  reportUrl,
+  onValidate,
+  onPlan,
+  onCompare,
+  onRunBatch,
+  onOpenTasks,
+}: {
+  project: Project | null;
+  mission: MissionTaskRecord | null;
+  taskData: TaskProjectData | null;
+  dataSummary: { taskUnits: number; equipmentGroups: number; spectrumRules: number; phases: number; links: number };
+  validation: TaskValidationResult | null;
+  plan: PlanResult | null;
+  visualization: TaskVisualizationData | null;
+  agentAssessment: TaskAgentAssessment | null;
+  performance: TaskPerformanceResult | null;
+  versions: TaskVersionsResult | null;
+  busy: boolean;
+  reportUrl: string;
+  onValidate: () => void;
+  onPlan: () => void;
+  onCompare: () => void;
+  onRunBatch: () => void;
+  onOpenTasks: () => void;
+}) {
+  void performance;
+  const units = taskData?.task_units ?? [];
+  const links = taskData?.links ?? [];
+  const phases = taskData?.phases ?? [];
+  const assignments = visualization?.assignments ?? [];
+  const risks = visualization?.risk_items ?? [];
+  const bands = visualization?.spectrum_timeline ?? [];
+  const summary = visualization?.summary ?? plan?.summary ?? {};
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(units[0]?.task_unit_id ?? null);
+  const [selectedPhaseId, setSelectedPhaseId] = useState(phases[0]?.phase_id ?? '');
+  const [timeWindow, setTimeWindow] = useState<'1h' | '6h' | '24h'>('6h');
+  const [layers, setLayers] = useState({ units: true, links: true, risks: true, zones: true });
+
+  useEffect(() => {
+    if (!units.length) {
+      setSelectedUnitId(null);
+      return;
+    }
+    if (!selectedUnitId || !units.some((unit) => unit.task_unit_id === selectedUnitId)) {
+      setSelectedUnitId([...units].sort((left, right) => right.priority - left.priority)[0].task_unit_id);
+    }
+  }, [selectedUnitId, units]);
+
+  useEffect(() => {
+    if (phases.length && !phases.some((phase) => phase.phase_id === selectedPhaseId)) setSelectedPhaseId(phases[0].phase_id);
+  }, [phases, selectedPhaseId]);
+
+  if (!project) {
+    return (
+      <section className="map-dashboard-empty">
+        <RadioTower size={30} />
+        <h2>尚未选择筹划项目</h2>
+        <button type="button" onClick={onOpenTasks}><Plus size={16} />创建或选择项目</button>
+      </section>
+    );
+  }
+
+  const selectedUnit = units.find((unit) => unit.task_unit_id === selectedUnitId) ?? units[0] ?? null;
+  const selectedAssignments = assignments.filter((item) => item.task_unit_id === selectedUnit?.task_unit_id);
+  const selectedRisks = risks
+    .filter((item) => item.task_unit_a === selectedUnit?.task_unit_id || item.task_unit_b === selectedUnit?.task_unit_id)
+    .sort((left, right) => right.score - left.score);
+  const unitPoints = mapUnitPoints(units);
+  const pointById = new Map(unitPoints.map((item) => [item.unit.task_unit_id, item]));
+  const riskLinks = risks
+    .filter((risk) => risk.task_unit_a && risk.task_unit_b && pointById.has(risk.task_unit_a) && pointById.has(risk.task_unit_b))
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 12);
+  const satisfaction = numberValue(summary.task_satisfaction_avg);
+  const highRiskCount = risks.filter((risk) => isHighRiskSeverity(risk.severity)).length;
+  const occupied = numberValue(summary.used_bandwidth_mhz);
+  const activePhase = phases.find((phase) => phase.phase_id === selectedPhaseId) ?? phases[0] ?? null;
+  const activeVersion = plan?.run_id ?? versions?.runs[0]?.run_id ?? null;
+
+  function toggleLayer(layer: keyof typeof layers) {
+    setLayers((current) => ({ ...current, [layer]: !current[layer] }));
+  }
+
+  return (
+    <section className="map-centric-dashboard" aria-label="战场电磁态势主看板">
+      <header className="map-command-toolbar">
+        <div>
+          <strong>战场电磁态势</strong>
+          <span>{mission?.region_name || '联合任务区域'}</span>
+        </div>
+        <label>
+          <span>任务阶段</span>
+          <select value={selectedPhaseId} onChange={(event) => setSelectedPhaseId(event.target.value)}>
+            {phases.length ? phases.map((phase) => <option key={phase.phase_id} value={phase.phase_id}>{phase.sequence}. {phase.name}</option>) : <option value="">待配置</option>}
+          </select>
+        </label>
+        <div className="map-time-segments" role="group" aria-label="时间窗口">
+          {(['1h', '6h', '24h'] as const).map((window) => (
+            <button className={timeWindow === window ? 'active' : ''} key={window} type="button" onClick={() => setTimeWindow(window)}>{window}</button>
+          ))}
+        </div>
+        <div className="map-toolbar-actions">
+          <button type="button" onClick={onValidate} disabled={busy}><FileCheck2 size={15} />校验</button>
+          <button type="button" onClick={onPlan} disabled={busy}><RefreshCw size={15} />规划</button>
+          <button type="button" onClick={onCompare} disabled={busy}><BarChart3 size={15} />方案对比</button>
+        </div>
+      </header>
+
+      <div className="map-status-strip">
+        <MapStatus label="任务保障" value={dashboardMetricValue(satisfaction, '%', 1)} tone="good" />
+        <MapStatus label="关键链路" value={`${links.length} 条`} tone="blue" />
+        <MapStatus label="高风险" value={`${highRiskCount} 条`} tone={highRiskCount ? 'danger' : 'good'} />
+        <MapStatus label="频谱占用" value={dashboardMetricValue(occupied, ' MHz', 1)} tone="violet" />
+        <MapStatus label="当前版本" value={activeVersion ? `#${activeVersion}` : '待生成'} tone="neutral" />
+        <MapStatus label="数据准备度" value={`${[mission, phases.length, units.length, taskData?.equipment_groups.length, links.length, taskData?.spectrum_rules.length].filter(Boolean).length}/6`} tone="good" />
+      </div>
+
+      <div className="map-workspace-grid">
+        <aside className="map-layer-panel" aria-label="态势图层">
+          <div className="map-panel-title"><Layers3 size={16} /><strong>图层控制</strong></div>
+          <div className="map-layer-list">
+            <MapLayerButton active={layers.units} count={units.length} label="任务单元" onClick={() => toggleLayer('units')} />
+            <MapLayerButton active={layers.links} count={links.length} label="通信链路" onClick={() => toggleLayer('links')} />
+            <MapLayerButton active={layers.risks} count={risks.length} label="冲突关系" onClick={() => toggleLayer('risks')} />
+            <MapLayerButton active={layers.zones} count={phases.length} label="任务区域" onClick={() => toggleLayer('zones')} />
+          </div>
+          <div className="map-unit-roster">
+            <span>任务单元</span>
+            {units.slice(0, 12).map((unit) => (
+              <button className={selectedUnit?.task_unit_id === unit.task_unit_id ? 'active' : ''} key={unit.task_unit_id} type="button" onClick={() => setSelectedUnitId(unit.task_unit_id)}>
+                <i className={`unit-priority p${Math.min(3, Math.max(1, Math.ceil(unit.priority / 3)))}`} />
+                <span><b>{unit.name}</b><em>{unit.unit_type}</em></span>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <div className="map-center-stack">
+          <div className="electromagnetic-map" aria-label="任务单元与电磁风险空间分布">
+            <div className="map-grid-labels" aria-hidden="true"><span>A1</span><span>A2</span><span>B1</span><span>B2</span></div>
+            {layers.zones && unitPoints.slice(0, 5).map(({ unit, x, y }, index) => (
+              <span className={`map-coverage-zone zone-${index % 3}`} key={`zone-${unit.task_unit_id}`} style={{ left: `${x}%`, top: `${y}%` }} />
+            ))}
+            <svg className="map-link-canvas" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              {layers.links && links.map((link) => {
+                const source = link.source_task_unit_id ? pointById.get(link.source_task_unit_id) : null;
+                const target = link.target_task_unit_id ? pointById.get(link.target_task_unit_id) : null;
+                if (!source || !target) return null;
+                return <line className="task-link" key={link.link_id} x1={source.x} y1={source.y} x2={target.x} y2={target.y} />;
+              })}
+              {layers.risks && riskLinks.map((risk, index) => {
+                const source = pointById.get(risk.task_unit_a!);
+                const target = pointById.get(risk.task_unit_b!);
+                if (!source || !target) return null;
+                return <line className={`risk-link ${riskTone(risk.severity)}`} key={`${risk.task_unit_a}-${risk.task_unit_b}-${index}`} x1={source.x} y1={source.y} x2={target.x} y2={target.y} />;
+              })}
+            </svg>
+            {layers.units && unitPoints.map(({ unit, x, y }) => {
+              const unitAssignments = assignments.filter((item) => item.task_unit_id === unit.task_unit_id);
+              const unitRisk = Math.max(0, ...unitAssignments.map((item) => item.risk_score));
+              return (
+                <button
+                  className={`map-task-node${selectedUnit?.task_unit_id === unit.task_unit_id ? ' active' : ''}${unitRisk >= 70 ? ' risk' : ''}`}
+                  key={unit.task_unit_id}
+                  type="button"
+                  style={{ left: `${x}%`, top: `${y}%` }}
+                  onClick={() => setSelectedUnitId(unit.task_unit_id)}
+                  title={`${unit.name} · ${unit.preferred_band_groups || '未配置频段'}`}
+                >
+                  <RadioTower size={15} />
+                  <span>{shorten(unit.name, 9)}</span>
+                </button>
+              );
+            })}
+            <div className="map-scale"><i /><span>10 km</span></div>
+            <div className="map-phase-badge"><span>{activePhase?.name || '任务阶段待配置'}</span><b>{timeWindow}</b></div>
+          </div>
+
+          <section className="map-spectrum-timeline">
+            <div className="timeline-head">
+              <div><RadioTower size={15} /><strong>频谱时间轴</strong></div>
+              <span>{bands.length} 个频段池 · {activePhase ? `${formatMissionTime(activePhase.starts_at)} 至 ${formatMissionTime(activePhase.ends_at)}` : '时段待配置'}</span>
+            </div>
+            <div className="timeline-axis"><span>开始</span><span>25%</span><span>50%</span><span>75%</span><span>结束</span></div>
+            <div className="timeline-band-list">
+              {bands.slice(0, 6).map((band) => (
+                <div key={`${band.band_group}-${band.start_mhz}`}>
+                  <b>{band.band_group}<small>{band.start_mhz.toFixed(3)}-{band.end_mhz.toFixed(3)} MHz</small></b>
+                  <span className="timeline-track">
+                    {band.markers.map((marker) => (
+                      <button
+                        className={`timeline-marker ${markerClass(marker.kind, marker.severity)}`}
+                        key={marker.id}
+                        type="button"
+                        style={{ left: `${marker.start_pct}%`, width: `${Math.max(1.5, marker.end_pct - marker.start_pct)}%` }}
+                        title={`${marker.label} · ${marker.start_mhz}-${marker.end_mhz} MHz`}
+                        onClick={() => marker.task_unit_id && setSelectedUnitId(marker.task_unit_id)}
+                      />
+                    ))}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <aside className="map-inspector-panel" aria-label="对象详情与风险解释">
+          <div className="map-panel-title"><RadioTower size={16} /><strong>对象详情</strong></div>
+          {selectedUnit ? (
+            <>
+              <div className="inspector-unit-head"><span>{selectedUnit.unit_type}</span><strong>{selectedUnit.name}</strong><em>优先级 {selectedUnit.priority}</em></div>
+              <dl className="inspector-metrics">
+                <div><dt>保障状态</dt><dd>{selectedAssignments.some((item) => item.status === '未满足') ? '需调整' : '已保障'}</dd></div>
+                <div><dt>装备组</dt><dd>{selectedAssignments.length}</dd></div>
+                <div><dt>主用频段</dt><dd>{selectedAssignments[0]?.band_group || '待分配'}</dd></div>
+                <div><dt>保障率</dt><dd>{selectedAssignments.length ? `${(selectedAssignments.reduce((total, item) => total + item.satisfaction_ratio, 0) / selectedAssignments.length * 100).toFixed(1)}%` : '待规划'}</dd></div>
+              </dl>
+              <section className="inspector-risk-section">
+                <div><strong>风险解释</strong><span>{selectedRisks.length} 条</span></div>
+                {selectedRisks.length ? selectedRisks.slice(0, 4).map((risk, index) => (
+                  <article key={`${risk.risk_type}-${index}`}>
+                    <span className={riskTone(risk.severity)}>{risk.severity}</span>
+                    <div><b>{risk.risk_type}</b><p>{shorten(risk.reason, 82)}</p></div>
+                    <em>{risk.score.toFixed(1)}</em>
+                  </article>
+                )) : <p className="map-empty-line">当前单元暂无冲突风险</p>}
+              </section>
+              <section className="inspector-action-section">
+                <div><strong>智能建议</strong><span>{agentAssessment?.next_actions.length ?? 0} 项</span></div>
+                {(agentAssessment?.next_actions ?? []).slice(0, 3).map((action) => <p key={action.action_id}><b>{action.title}</b>{shorten(action.why, 74)}</p>)}
+                <button type="button" onClick={onPlan} disabled={busy}><RefreshCw size={15} />执行重算</button>
+              </section>
+            </>
+          ) : <div className="map-empty-line">请选择任务单元</div>}
+          <footer className="inspector-footer">
+            <button type="button" onClick={onRunBatch} disabled={busy}>规模压测</button>
+            {reportUrl && <a href={reportUrl}>查看报告</a>}
+          </footer>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function MapStatus({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return <div className={`map-status ${tone}`}><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function MapLayerButton({ active, count, label, onClick }: { active: boolean; count: number; label: string; onClick: () => void }) {
+  return <button className={active ? 'active' : ''} type="button" aria-pressed={active} onClick={onClick}><i /> <span>{label}</span><em>{count}</em></button>;
+}
+
+function mapUnitPoints(units: TaskProjectData['task_units']): Array<{ unit: TaskProjectData['task_units'][number]; x: number; y: number }> {
+  if (!units.length) return [];
+  const latitudes = units.map((unit) => unit.area_center_lat).filter((value): value is number => value !== null);
+  const longitudes = units.map((unit) => unit.area_center_lon).filter((value): value is number => value !== null);
+  const minLat = latitudes.length ? Math.min(...latitudes) : 0;
+  const maxLat = latitudes.length ? Math.max(...latitudes) : 0;
+  const minLon = longitudes.length ? Math.min(...longitudes) : 0;
+  const maxLon = longitudes.length ? Math.max(...longitudes) : 0;
+  return units.map((unit, index) => {
+    const fallbackX = 14 + (index % 4) * 23;
+    const fallbackY = 18 + Math.floor(index / 4) * 27;
+    const x = unit.area_center_lon === null || maxLon === minLon ? fallbackX : 10 + ((unit.area_center_lon - minLon) / (maxLon - minLon)) * 80;
+    const y = unit.area_center_lat === null || maxLat === minLat ? fallbackY : 88 - ((unit.area_center_lat - minLat) / (maxLat - minLat)) * 76;
+    return { unit, x: Math.max(8, Math.min(92, x)), y: Math.max(10, Math.min(90, y)) };
+  });
 }
 
 function TaskDashboardOverview({
