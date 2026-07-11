@@ -20,10 +20,13 @@ from ..models import (
     EquipmentAssignment,
     EquipmentGroup,
     PlanningRun,
+    PlanningSnapshot,
     Project,
     MissionTask,
     SpectrumResource,
     SpectrumRule,
+    TaskLink,
+    TaskPhase,
     TaskRiskItem,
     TaskUnit,
 )
@@ -639,11 +642,115 @@ def run_task_planning(session: Session, project_id: int, objective: str = "task_
     run.message = result["message"]
     run.elapsed_ms = int((time.perf_counter() - start) * 1000)
     run.summary_json = json.dumps(result["summary"], ensure_ascii=False)
+    _save_planning_snapshot(session, project_id, run, constraints)
     _touch_project(session, project_id, "task_planned")
     session.add(AuditLog(project_id=project_id, run_id=run.id, action="task_plan_success", detail=run.message))
     session.commit()
     session.refresh(run)
     return run
+
+
+def _save_planning_snapshot(session: Session, project_id: int, run: PlanningRun, constraints: dict) -> None:
+    if run.id is None:
+        return
+    previous = session.exec(
+        select(PlanningSnapshot)
+        .where(PlanningSnapshot.project_id == project_id)
+        .order_by(PlanningSnapshot.run_id.desc())
+    ).first()
+    parent_run_id = _normalized_run_id(constraints.get("base_run_id")) or (previous.run_id if previous else None)
+    payload = {
+        "mission_tasks": _snapshot_rows(session, MissionTask, project_id),
+        "task_phases": _snapshot_rows(session, TaskPhase, project_id),
+        "task_units": _snapshot_rows(session, TaskUnit, project_id),
+        "equipment_groups": _snapshot_rows(session, EquipmentGroup, project_id),
+        "task_links": _snapshot_rows(session, TaskLink, project_id),
+        "spectrum_rules": _snapshot_rows(session, SpectrumRule, project_id),
+        "spectrum_resources": _snapshot_rows(session, SpectrumResource, project_id),
+    }
+    session.add(
+        PlanningSnapshot(
+            project_id=project_id,
+            run_id=run.id,
+            parent_run_id=parent_run_id,
+            rollback_source_run_id=_normalized_run_id(constraints.get("rollback_source_run_id")),
+            lifecycle_status="候选",
+            input_json=json.dumps(payload, ensure_ascii=False, default=str),
+        )
+    )
+
+
+def _snapshot_rows(session: Session, model: type, project_id: int) -> list[dict]:
+    rows = session.exec(select(model).where(model.project_id == project_id).order_by(model.id)).all()
+    return [{key: value for key, value in row.model_dump().items() if key not in {"id", "project_id"}} for row in rows]
+
+
+def adopt_task_plan(session: Session, project_id: int, run_id: int) -> dict:
+    snapshot = session.exec(
+        select(PlanningSnapshot).where(PlanningSnapshot.project_id == project_id, PlanningSnapshot.run_id == run_id)
+    ).first()
+    run = session.get(PlanningRun, run_id)
+    if snapshot is None or run is None or run.project_id != project_id or run.status != "success":
+        raise ValueError("规划版本不存在或不可采纳")
+    for item in session.exec(select(PlanningSnapshot).where(PlanningSnapshot.project_id == project_id)).all():
+        item.adopted = item.run_id == run_id
+        if item.run_id == run_id:
+            item.lifecycle_status = "已采纳（回滚）" if item.lifecycle_status == "已回滚" else "已采纳"
+        elif item.lifecycle_status not in {"已回退", "已回滚"}:
+            item.lifecycle_status = "历史"
+        item.adopted_at = datetime.utcnow() if item.run_id == run_id else None
+        session.add(item)
+    session.add(AuditLog(project_id=project_id, run_id=run_id, actor="user", action="task_plan_adopted", detail=f"采纳规划版本 #{run_id}"))
+    session.commit()
+    return {"ok": True, "run_id": run_id, "lifecycle_status": "已采纳", "adopted": True}
+
+
+def rollback_task_plan(session: Session, project_id: int, source_run_id: int) -> PlanningRun:
+    snapshot = session.exec(
+        select(PlanningSnapshot).where(PlanningSnapshot.project_id == project_id, PlanningSnapshot.run_id == source_run_id)
+    ).first()
+    source_run = session.get(PlanningRun, source_run_id)
+    if snapshot is None or source_run is None or source_run.project_id != project_id:
+        raise ValueError("缺少可回滚的方案输入快照")
+    payload = json.loads(snapshot.input_json or "{}")
+    model_keys = (
+        (MissionTask, "mission_tasks"),
+        (TaskPhase, "task_phases"),
+        (TaskUnit, "task_units"),
+        (EquipmentGroup, "equipment_groups"),
+        (TaskLink, "task_links"),
+        (SpectrumRule, "spectrum_rules"),
+        (SpectrumResource, "spectrum_resources"),
+    )
+    try:
+        for model, key in model_keys:
+            session.exec(delete(model).where(model.project_id == project_id))
+            for record in payload.get(key, []):
+                session.add(model(project_id=project_id, **record))
+        session.add(AuditLog(project_id=project_id, run_id=source_run_id, actor="user", action="task_plan_rollback_restore", detail=f"恢复版本 #{source_run_id} 的完整输入快照"))
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+    summary = json.loads(source_run.summary_json or "{}")
+    constraints = {
+        "weights": summary.get("constraint_weights") or {},
+        "strategy_profile": summary.get("strategy_profile") or "balanced",
+        "base_run_id": source_run_id,
+        "rollback_source_run_id": source_run_id,
+    }
+    new_run = run_task_planning(session, project_id, str(summary.get("requested_objective") or source_run.objective), constraints=constraints)
+    restored = session.exec(
+        select(PlanningSnapshot).where(PlanningSnapshot.project_id == project_id, PlanningSnapshot.run_id == new_run.id)
+    ).first()
+    if restored:
+        restored.lifecycle_status = "已回滚"
+        session.add(restored)
+    session.add(AuditLog(project_id=project_id, run_id=new_run.id, actor="system", action="task_plan_rollback_completed", detail=f"从版本 #{source_run_id} 生成恢复版本 #{new_run.id}"))
+    session.commit()
+    adopt_task_plan(session, project_id, int(new_run.id or 0))
+    return new_run
 
 
 def execute_capacity_batch_planning(session: Session, project_id: int, payload: dict | None = None) -> dict:
@@ -3907,6 +4014,10 @@ def task_versions_and_audit(session: Session, project_id: int) -> dict:
         .order_by(PlanningRun.id.desc())
         .limit(20)
     ).all()
+    snapshot_by_run = {
+        item.run_id: item
+        for item in session.exec(select(PlanningSnapshot).where(PlanningSnapshot.project_id == project_id)).all()
+    }
     logs = session.exec(select(AuditLog).where(AuditLog.project_id == project_id).order_by(AuditLog.id.desc()).limit(40)).all()
     return {
         "runs": [
@@ -3919,6 +4030,11 @@ def task_versions_and_audit(session: Session, project_id: int) -> dict:
                 "created_at": run.created_at.isoformat(),
                 "summary": json.loads(run.summary_json or "{}"),
                 "replan_effect": _replan_effect_for_run(session, project_id, run),
+                "lifecycle_status": snapshot_by_run[run.id].lifecycle_status if run.id in snapshot_by_run else "历史（无快照）",
+                "adopted": snapshot_by_run[run.id].adopted if run.id in snapshot_by_run else False,
+                "parent_run_id": snapshot_by_run[run.id].parent_run_id if run.id in snapshot_by_run else None,
+                "rollback_source_run_id": snapshot_by_run[run.id].rollback_source_run_id if run.id in snapshot_by_run else None,
+                "snapshot_available": run.id in snapshot_by_run,
             }
             for run in runs
         ],

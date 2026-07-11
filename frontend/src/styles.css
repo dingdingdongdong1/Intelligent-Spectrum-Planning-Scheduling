@@ -5376,6 +5376,7 @@ button.secondary:hover {
 }
 
 .version-actions {
+  flex-wrap: wrap;
   margin-top: 10px;
 }
 
@@ -5400,6 +5401,10 @@ button.secondary:hover {
   border-color: #1f5eff;
   color: #1f5eff;
 }
+
+.version-actions button.rollback { border-color: #e3a1a1; color: #a52222; }
+.version-lifecycle { display: inline-flex; width: max-content; margin-top: 3px; padding: 2px 6px; border: 1px solid #c7d1df; border-radius: 4px; background: #eef2f7; color: #536277 !important; font-size: 10px !important; font-weight: 800; }
+.version-lifecycle.adopted { border-color: #8fc8ad; background: #eaf7f1; color: #176b4b !important; }
 
 .closure-event-list article {
   display: grid;

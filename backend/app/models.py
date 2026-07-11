@@ -61,6 +61,21 @@ class PlanningRun(SQLModel, table=True):
     summary_json: str = "{}"
 
 
+class PlanningSnapshot(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("project_id", "run_id", name="uq_planningsnapshot_project_run"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(index=True)
+    run_id: int = Field(index=True)
+    parent_run_id: int | None = Field(default=None, index=True)
+    rollback_source_run_id: int | None = Field(default=None, index=True)
+    lifecycle_status: str = "候选"
+    adopted: bool = False
+    input_json: str = "{}"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    adopted_at: datetime | None = None
+
+
 class Assignment(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     project_id: int = Field(index=True)

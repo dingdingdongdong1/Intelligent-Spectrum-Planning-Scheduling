@@ -1169,6 +1169,11 @@ export type TaskVersionRun = {
   created_at: string;
   summary: Record<string, unknown>;
   replan_effect?: ReplanEffect | null;
+  lifecycle_status: string;
+  adopted: boolean;
+  parent_run_id: number | null;
+  rollback_source_run_id: number | null;
+  snapshot_available: boolean;
 };
 
 export type TaskAuditLog = {
@@ -1594,6 +1599,14 @@ export async function previewTaskStrategyTrials(projectId: number, payload: Task
 
 export async function getTaskVersions(projectId: number): Promise<TaskVersionsResult> {
   return request<TaskVersionsResult>(`/api/projects/${projectId}/task-versions`);
+}
+
+export async function adoptTaskPlan(projectId: number, runId: number): Promise<{ ok: boolean; run_id: number; lifecycle_status: string; adopted: boolean }> {
+  return request(`/api/projects/${projectId}/task-runs/${runId}/adopt`, { method: 'POST' });
+}
+
+export async function rollbackTaskPlan(projectId: number, runId: number): Promise<PlanResult> {
+  return request<PlanResult>(`/api/projects/${projectId}/task-runs/${runId}/rollback`, { method: 'POST' });
 }
 
 export async function getTaskAgentAssessment(projectId: number, runId?: number | null): Promise<TaskAgentAssessment> {

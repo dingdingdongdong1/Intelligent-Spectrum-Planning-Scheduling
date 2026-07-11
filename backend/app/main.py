@@ -43,6 +43,7 @@ from .services.equipment_planning import (
     build_task_export_xlsx,
     build_task_report,
     build_task_visualization_data,
+    adopt_task_plan,
     compare_task_plans,
     create_spectrum_rule,
     delete_spectrum_rule,
@@ -61,6 +62,7 @@ from .services.equipment_planning import (
     preview_task_replan,
     preview_task_strategy_trials,
     replan_task_project,
+    rollback_task_plan,
     replace_equipment_groups,
     replace_spectrum_rules,
     replace_task_units,
@@ -123,6 +125,7 @@ app.add_middleware(
         "http://127.0.0.1:5176",
         "http://localhost:5176",
     ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -821,6 +824,25 @@ def task_capacity_risk_closure(project_id: int, payload: TaskCapacityRiskClosure
 def task_versions(project_id: int, session: Session = Depends(get_session)) -> dict:
     _require_project(session, project_id)
     return task_versions_and_audit(session, project_id)
+
+
+@app.post("/api/projects/{project_id}/task-runs/{run_id}/adopt")
+def task_run_adopt(project_id: int, run_id: int, session: Session = Depends(get_session)) -> dict:
+    _require_project(session, project_id)
+    try:
+        return adopt_task_plan(session, project_id, run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/projects/{project_id}/task-runs/{run_id}/rollback", response_model=PlanResponse)
+def task_run_rollback(project_id: int, run_id: int, session: Session = Depends(get_session)) -> dict:
+    _require_project(session, project_id)
+    try:
+        run = rollback_task_plan(session, project_id, run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _run_response(run)
 
 
 @app.get("/api/projects/{project_id}/task-agent-assessment")

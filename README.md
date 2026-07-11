@@ -19,7 +19,7 @@
 - 可视化总览：展示任务保障率、频段占用、空间态势联动、任务保障矩阵。
 - 动态重规划：支持禁用频段、补充可用频段、提高优先级、锁定任务或装备后重筹。
 - 多方案对比：批量试算不同目标与约束模板，给出推荐方案和取舍理由。
-- 报表与留痕：导出 HTML 报告、Excel 结果，保留规划版本、审计日志和能力验收状态。
+- 报表与留痕：导出 HTML 报告、Excel 结果，保留规划版本、完整输入快照、采纳状态、审计日志和能力验收状态；历史版本可恢复任务、装备、链路、规则和频谱资源并生成新的回滚版本。
 
 ## 快速启动
 
@@ -100,6 +100,8 @@ GET http://127.0.0.1:8000/api/phase-one-capabilities
 - `GET /api/projects/{id}/task-report`
 - `GET /api/projects/{id}/task-export.xlsx`
 - `GET /api/projects/{id}/task-versions`
+- `POST /api/projects/{id}/task-runs/{run_id}/adopt`
+- `POST /api/projects/{id}/task-runs/{run_id}/rollback`
 - `GET /api/projects/{id}/task-agent-assessment`
 
 ## LLM 配置

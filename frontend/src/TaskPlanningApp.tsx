@@ -91,6 +91,8 @@ import {
   uploadTaskFile,
   url,
   validateTaskProject,
+  adoptTaskPlan,
+  rollbackTaskPlan,
 } from './api';
 import TaskWorkbench from './TaskWorkbench';
 import SpectrumResourcePanel from './SpectrumResourcePanel';
@@ -673,6 +675,25 @@ export default function TaskPlanningApp() {
       setReplanConfirmed(false);
       document.getElementById('task-replan-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+
+  async function handleAdoptVersion(run: TaskVersionRun) {
+    if (!project) return;
+    const result = await runAction(() => adoptTaskPlan(project.id, run.run_id), `已正式采纳规划版本 #${run.run_id}`);
+    if (!result) return;
+    await refreshVersions(project.id);
+    await handleSelectVersion(run);
+  }
+
+  async function handleRollbackVersion(run: TaskVersionRun) {
+    if (!project || !run.snapshot_available) return;
+    if (!window.confirm(`确认恢复版本 #${run.run_id} 的完整任务、装备、链路、规则和频谱资源输入？系统将生成新的回滚版本。`)) return;
+    const result = await runAction(() => rollbackTaskPlan(project.id, run.run_id), `已恢复版本 #${run.run_id} 并生成新方案`);
+    if (!result?.run_id) return;
+    setPlan(result);
+    await Promise.all([refreshTaskDataSummary(project.id), refreshSpectrumRules(project.id)]);
+    setTaskDataRevision((current) => current + 1);
+    await loadVisualization(project.id, result.run_id);
   }
 
   async function handleReplan() {
@@ -1389,6 +1410,8 @@ export default function TaskPlanningApp() {
                   onRefresh={() => project && refreshVersions(project.id)}
                   onSelectRun={handleSelectVersion}
                   onReuseRun={handleReuseVersionStrategy}
+                  onAdoptRun={handleAdoptVersion}
+                  onRollbackRun={handleRollbackVersion}
                 />
                 <PlanningPerformancePanel busy={busy} data={performance} onRun={handlePerformanceTest} onRunBatch={handleBatchPerformanceTest} />
                 <CapacityBatchExecutionPanel
@@ -5037,12 +5060,16 @@ function VersionAuditPanel({
   onRefresh,
   onSelectRun,
   onReuseRun,
+  onAdoptRun,
+  onRollbackRun,
 }: {
   data: TaskVersionsResult | null;
   activeRunId?: number | null;
   onRefresh: () => void;
   onSelectRun: (run: TaskVersionRun) => void;
   onReuseRun: (run: TaskVersionRun) => void;
+  onAdoptRun: (run: TaskVersionRun) => void;
+  onRollbackRun: (run: TaskVersionRun) => void;
 }) {
   const activeRun = activeRunId ? data?.runs.find((run) => run.run_id === activeRunId) ?? null : null;
   const comparison = data && activeRun ? buildRunComparison(data.runs, activeRun.run_id) : null;
@@ -5072,6 +5099,7 @@ function VersionAuditPanel({
                       <div>
                         <strong>#{run.run_id}</strong>
                         <span>{objectiveLabel(String(run.summary.requested_objective ?? run.objective)) || run.objective}</span>
+                        <span className={`version-lifecycle ${run.adopted ? 'adopted' : ''}`}>{run.lifecycle_status}</span>
                       </div>
                       <em>{new Date(run.created_at).toLocaleString()}</em>
                     </div>
@@ -5093,6 +5121,18 @@ function VersionAuditPanel({
                         <RotateCcw size={14} />
                         复用策略
                       </button>
+                      {!run.adopted && run.snapshot_available && (
+                        <button type="button" onClick={() => onAdoptRun(run)}>
+                          <Save size={14} />
+                          正式采纳
+                        </button>
+                      )}
+                      {run.snapshot_available && (
+                        <button type="button" className="rollback" onClick={() => onRollbackRun(run)}>
+                          <RotateCcw size={14} />
+                          恢复输入
+                        </button>
+                      )}
                     </div>
                   </article>
                 );
@@ -5251,6 +5291,9 @@ function auditActionLabel(action: string): string {
     task_plan_success: '规划成功',
     task_plan_failed: '规划失败',
     task_compare: '目标对比',
+    task_plan_adopted: '正式采纳方案',
+    task_plan_rollback_restore: '恢复方案输入',
+    task_plan_rollback_completed: '完成方案回滚',
   };
   return labels[action] ?? action;
 }
